@@ -1,0 +1,14 @@
+#!/bin/bash
+
+IMAGE=sidecar.tar
+
+if [ -f $IMAGE ]; then
+	podman pull oci-archive:$IMAGE
+fi
+
+podman stop sidecar-test
+podman rm sidecar-test
+id=$(podman create --expose 8889 --publish 8889:8889 --name sidecar-test opensuse/sidecar)
+podman start --interactive $id
+sleep 1
+podman logs $id

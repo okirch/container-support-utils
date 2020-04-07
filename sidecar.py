@@ -11,7 +11,7 @@ from twisted.web.resource import NoResource
 from twisted.cred.portal import IRealm, Portal
 from twisted.cred.checkers import InMemoryUsernamePasswordDatabaseDontUse
 
-import rpms
+from suse_sidecar.rpms import RpmDB
 
 ##################################################################
 # /rpms
@@ -22,7 +22,7 @@ import rpms
 class RpmDbResource(resource.Resource):
 	def __init__(self):
 		resource.Resource.__init__(self)
-		self.db = rpms.RpmDB()
+		self.db = RpmDB()
 
 		# Setting isLead to True causes a "DELETE /rpms/blubber" to
 		# invoke our render_DELETE() method with a postpath of
