@@ -12,6 +12,7 @@ from twisted.cred.portal import IRealm, Portal
 from twisted.cred.checkers import InMemoryUsernamePasswordDatabaseDontUse
 
 from suse_sidecar.rpms import RpmDB
+from suse_sidecar.process import ProcFS
 
 ##################################################################
 # /rpms

@@ -1,4 +1,5 @@
-PYMODULES	= rpms.py
+PYMODULES	= rpms.py \
+		  process.py
 PYAPP		= sidecar.py
 BINDIR		= /usr/bin
 
