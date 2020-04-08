@@ -10,6 +10,9 @@ modify the underlying image. However, the changes will persist
 when you restart the container on the same host, eg through
 podman stop/start.
 
+The source code is currently available through
+https://gitlab.suse.de/okir/support-sidecar.git
+
 
 How does it work
 
