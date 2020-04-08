@@ -2,13 +2,34 @@
 
 IMAGE=sidecar.tar
 
+# If we've just produced a new version of the image using the BUILD
+# script, pull it into podman
 if [ -f $IMAGE ]; then
 	podman pull oci-archive:$IMAGE
 fi
 
-podman stop sidecar-test
-podman rm sidecar-test
-id=$(podman create --expose 8889 --publish 8889:8889 --name sidecar-test opensuse/sidecar)
-podman start --interactive $id
-sleep 1
-podman logs $id
+
+function single_container_test()
+{
+	podman stop sidecar-test
+	podman rm sidecar-test
+	id=$(podman create --expose 8889 --publish 8889:8889 --name sidecar-test opensuse/sidecar)
+	podman start --interactive $id
+	sleep 1
+	podman logs $id
+}
+
+function sidecar_container_test()
+{
+	podman pod stop test
+	podman pod rm test
+
+	podman pod create --name test --share=pid
+	id1=$(podman create --pod=test --name=test.main --entrypoint /bin/bash --interactive --tty opensuse/leap)
+	id2=$(podman create --pod=test --name=test.sidecar --privileged=true --expose 8889 --publish 8889:8889 opensuse/sidecar)
+	podman pod start test
+	podman pod ps
+	podman ps
+}
+
+sidecar_container_test
