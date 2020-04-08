@@ -70,18 +70,76 @@ class RpmDbResource(JsonResource):
 		return self.jsonResponse(request, self.db.uninstall(pkgName))
 
 ##################################################################
+# Service encapsulating a container's process listing
+##################################################################
+class ContainerProcessListService(JsonResource):
+	def __init__(self, container):
+		JsonResource.__init__(self)
+		self.container = container
+
+		self.isLeaf = True
+
+	def render_GET(self, request):
+		listing = []
+		for p in self.container.processes:
+			listing.append(p.json())
+		return self.jsonResponse(request, listing)
+
+	def render_DELETE(self, request):
+		if len(request.postpath) != 1:
+			return self.errorBadRequest(request, "Bad path", "The path must contain exactly one pid")
+
+		pid = request.postpath[0]
+		try:
+			pid = int(pid)
+		except:
+			return self.errorBadRequest(request, "Not a valid pid")
+
+		return self.errorNotImplemented(request, "Process kill not yet implemented")
+		return self.jsonResponse(request, self.container.kill(pid))
+
+##################################################################
+# Service encapsulating a container
+##################################################################
+class ContainerService(JsonResource):
+	def __init__(self, container):
+		JsonResource.__init__(self)
+		self.container = container
+
+		print("container %s root %s" % (container.hostname, container.rootDir()))
+		self.putChild("rpms", RpmDbResource(container.rootDir()))
+		self.putChild("processes", ContainerProcessListService(container))
+
+	def render_GET(self, request):
+		return self.jsonResponse(request, ("rpms", "processes"))
+
+##################################################################
 # The / of the support sidecar http server
 ##################################################################
 class SupportService(JsonResource):
 	def __init__(self):
-		resource.Resource.__init__(self)
-		self.putChild("rpms", RpmDbResource())
+		JsonResource.__init__(self)
+		self.procFS = ProcFS()
+
+	def containers(self, excludingSelf = True):
+		return self.procFS.containers(excludingSelf)
 
 	def getChild(self, path, request):
-		return self
+		print("getChild(%s)" % path)
+		if path == "":
+			return self
+
+		for con in self.containers():
+			if con.hostname == path:
+				return ContainerService(con)
+
+		return resource.NoResource("Not a valid container hostname")
 
 	def render(self, request):
-		return "General information should go here"
+		result = []
+		for con in self.containers():
+			result.append(con.hostname)
+		return self.jsonResponse(request, result)
 
 ##################################################################
 # AdministrativeRealm - linked to a set of credentials
