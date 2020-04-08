@@ -1,0 +1,129 @@
+
+What is it
+
+The SUSE Support sidecar is a container image. You can run it
+alongside a container that is giving you trouble, and it allows
+you to track what it's doing, install or remove packages, etc.
+
+Note that these changes are not persistent, ie this does not
+modify the underlying image. However, the changes will persist
+when you restart the container on the same host, eg through
+podman stop/start.
+
+
+How does it work
+
+The sidecar works by sharing a common pid namespace between the
+container to be inspected, and the sidecar. This allows the
+sidecar to look at the processes of all containers in the pod.
+It will try to identify the container they belong to.
+
+The sidecar can access each container's file system namespace through
+/proc/<pid>/root/ of any process running inside that container. It
+can extract the container ID from etc/HOSTNAME, and it can access the
+container's RPM database. That's really all there is to it.
+
+The whole thing is implemented as a simplistic web server using
+Twisted. It requires authentication; however, the credentials are
+currently hard-coded.
+
+
+
+
+Playing with it
+
+This whole thing is not very polished yet. There are, however, scripts
+to create a sidecar image and deploy it in a test setting.
+
+To use this, you will need to have podman and buildah installed. Try
+the following as root:
+
+ podman pull opensuse/leap
+
+ ./BUILD
+ 	This will create a container image that contains the
+	support sidecar, based on the leap base container.
+
+ ./RUN
+	This will create a pod named "test", consisting of
+	two containers. One is a regular leap container,
+	running /bin/bash. The other is the sidecar container.
+
+Now, you can run commands to inspect your running container:
+
+
+url=http://localhost:8889
+alias curl="curl -vvv --digest --user admin:secret"
+
+curl $url
+	Returns a list of containers visible to the sidecar.
+	The identifiers returned are the same as the IDs used
+	by podman (retrieved from the containers' /etc/HOSTNAME
+	file).
+
+	If everything works properly, this should be the ID
+	of the leap container that is running in the test pod
+	created above.
+
+	(In some cases, this will also show a null entry; I
+	still need to find out where this is coming from)
+
+container=... (insert container ID returned above)
+
+curl $url/$container
+	Returns a list of per-container resources the sidecar
+	is able to serve. Currently, this will show "rpms"
+	and "process".
+
+curl $url/$container/process
+	Shows a process listing of processes running inside
+	that container
+
+curl -X DELETE $url/$container/process/$pid
+	This might be a way to kill running processes inside
+	the container - not implemented right now
+
+
+curl $url/$container/rpms
+	Returns a list of packages installed inside the
+	container
+
+curl -X DELETE $url/$container/rpms/ca-certificates
+	This will try to uninstall the ca-certificates
+	package inside the container. This should fail, as the
+	package is required by ca-certificates-mozilla.
+
+	The data returned should look like this:
+
+	{"status": "failed",
+	 "problems": [[
+	 	"ca-certificates is needed by (installed) ca-certificates-mozilla-2.34-lp151.2.3.1.noarch",
+		[4, "ca-certificates", 121]
+	 ]]
+	}
+
+curl -X DELETE $url/$container/rpms/mozilla-ca-certificates
+	This should succeed, as nothing requires this package.
+
+	The data returned should look like this:
+
+	{"status": "erased",
+	 "package": {
+	 	"release": "lp151.2.3.1",
+		"version": "2.34",
+		"name": "ca-certificates-mozilla",
+		"installdate": "2020-02-11T20:03:50"
+		}
+	}
+
+zypper download ltrace
+rpm=$(find /var/cache/zypp/packages -name 'ltrace*.rpm' | head -1)
+curl -T $rpm $url/$container/rpms
+	This will install the ltrace package inside the running
+	container
+
+To end the testing:
+
+podman pod stop test
+podman pod rm test
+

@@ -1,0 +1,18 @@
+
+Things to be done
+
+ - testing this with kubernetes. Right now, I've only tried this
+   with podman
+
+ - testing this with several containers inside one pod
+
+ - bugfixing
+
+ - command line parsing. We want to make the port number
+   configurable
+
+ - extract the admin password from an environment variable, so
+   that podman/kubernetes/etc can pass that secret
+
+ - add a /fs service that lets you view random files inside the
+   running container
