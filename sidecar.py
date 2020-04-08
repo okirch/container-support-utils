@@ -6,7 +6,7 @@ from zope.interface import implementer
 
 from twisted.python import log
 from twisted.internet import reactor
-from twisted.web import server, resource, guard
+from twisted.web import server, resource, guard, http
 from twisted.web.resource import NoResource
 from twisted.cred.portal import IRealm, Portal
 from twisted.cred.checkers import InMemoryUsernamePasswordDatabaseDontUse
@@ -15,41 +15,56 @@ from suse_sidecar.rpms import RpmDB
 from suse_sidecar.process import ProcFS
 
 ##################################################################
-# /rpms
-#  GET	returns the list of installed packages
-#  PUT	install/update a package. The binary package needs to
-#	be supplied as content to the request.
+# This is a resource base class
+# Its main purpose in life is providing a utility function
+# for sending json responses
 ##################################################################
-class RpmDbResource(resource.Resource):
-	def __init__(self):
-		resource.Resource.__init__(self)
-		self.db = RpmDB()
-
-		# Setting isLead to True causes a "DELETE /rpms/blubber" to
-		# invoke our render_DELETE() method with a postpath of
-		# "blubber"
-		self.isLeaf = True
-
+class JsonResource(resource.Resource):
 	def jsonResponse(self, request, reply):
 		import json
 
 		request.responseHeaders.addRawHeader(b"content-type", b"application/json")
 		return json.dumps(reply) + "\n"
 
+	def errorPage(self, request, code, msg, detail):
+		return resource.ErrorPage(code, msg, detail or msg).render(request)
+
+	def errorBadRequest(self, request, msg, detail = None):
+		return self.errorPage(request, http.BAD_REQUEST, msg, detail)
+
+	def errorNotImplemented(self, request, msg, detail = None):
+		return self.errorPage(request, http.NOT_IMPLEMENTED, msg, detail)
+
+##################################################################
+# /rpms
+#  GET	returns the list of installed packages
+#  PUT	install/update a package. The binary package needs to
+#	be supplied as content to the request.
+##################################################################
+class RpmDbResource(JsonResource):
+	def __init__(self, root = "/"):
+		JsonResource.__init__(self)
+		self.db = RpmDB(root)
+
+		# Setting isLead to True causes a "DELETE /rpms/blubber" to
+		# invoke our render_DELETE() method with a postpath of
+		# "blubber"
+		self.isLeaf = True
+
 	def render_GET(self, request):
 		if len(request.postpath) != 0:
-			raise ValueError("Bad path")
+			return self.errorBadRequest(request, "Bad path", "Extra path component after rpms/")
 		return self.jsonResponse(request, self.db.query())
 
 	def render_PUT(self, request):
 		if len(request.postpath) != 0:
-			raise ValueError("Bad path")
+			return self.errorBadRequest(request, "Bad path", "Extra path component after rpms/")
 		return self.jsonResponse(request, self.db.install(request.content))
 
 	def render_DELETE(self, request):
 		if len(request.postpath) != 1:
-			# I'm sure there's a cleaner way to do this
-			raise ValueError("Bad path")
+			return self.errorBadRequest(request, "Bad path", "The path must contain exactly one package name")
+
 		pkgName = request.postpath[0]
 
 		return self.jsonResponse(request, self.db.uninstall(pkgName))
@@ -57,7 +72,7 @@ class RpmDbResource(resource.Resource):
 ##################################################################
 # The / of the support sidecar http server
 ##################################################################
-class SupportService(resource.Resource):
+class SupportService(JsonResource):
 	def __init__(self):
 		resource.Resource.__init__(self)
 		self.putChild("rpms", RpmDbResource())
