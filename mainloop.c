@@ -45,8 +45,7 @@ io_close_dead(void)
 		struct endpoint *ep = io_endpoints[i];
 
 		if (ep->write_shutdown_sent && ep->read_shutdown_received) {
-			if (ep->debug)
-				fprintf(stderr, "%-10s socket is a zombie\n", endpoint_debug_name(ep));
+			endpoint_debug(ep, "socket is a zombie");
 			dead[ndead++] = ep;
 		} else {
 			io_endpoints[j++] = ep;
@@ -61,8 +60,7 @@ io_close_dead(void)
 			struct endpoint *ep = io_endpoints[j];
 
 			if (zombie->recvq == &ep->sendq) {
-				if (ep->debug)
-					fprintf(stderr, "%-10s socket peer is a zombie\n", endpoint_debug_name(ep));
+				endpoint_debug(ep, "socket peer is a zombie");
 				endpoint_shutdown_write(ep);
 			}
 			if (ep->recvq == &zombie->sendq) {
@@ -71,8 +69,7 @@ io_close_dead(void)
 			}
 		}
 
-		if (zombie->debug)
-			fprintf(stderr, "%-10s DESTROYED\n", endpoint_debug_name(zombie));
+		endpoint_debug(zombie, "DESTROYED");
 		endpoint_free(zombie);
 	}
 }
@@ -112,8 +109,7 @@ io_mainloop(long timeout)
 			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
 				if (ep->debug) {
 					int events = pfd[nfds].events;
-					printf("%-10s poll %s%s\n",
-							endpoint_debug_name(ep),
+					endpoint_debug(ep, "poll %s%s",
 							(events & POLLIN)? " POLLIN" : "",
 							(events & POLLOUT)? " POLLOUT" : "");
 				}
@@ -144,11 +140,10 @@ io_mainloop(long timeout)
 			struct endpoint *ep = watching[i];
 
 			if (pfd[i].revents & POLLOUT) {
-				if (ep->debug)
-					printf("%-10s socket can send\n", endpoint_debug_name(ep));
+				endpoint_debug(ep, "socket can send");
 				count = endpoint_transmit(ep);
 				if (count < 0) {
-					fprintf(stderr, "%-10s socket transmit error\n", endpoint_debug_name(ep));
+					endpoint_error(ep, "socket transmit error");
 					return -1;
 				}
 
@@ -161,21 +156,18 @@ io_mainloop(long timeout)
 			struct endpoint *ep = watching[i];
 
 			if (pfd[i].revents & POLLHUP) {
-				if (ep->debug)
-					printf("%-10s hangup from client\n", endpoint_debug_name(ep));
+				endpoint_debug(ep, "hangup from client");
 			}
 
 			if (pfd[i].revents & POLLIN) {
-				if (ep->debug)
-					printf("%-10s socket has data\n", endpoint_debug_name(ep));
+				endpoint_debug(ep, "socket has data");
 				count = endpoint_receive(ep);
 				if (count < 0) {
-					fprintf(stderr, "%-10s socket receive error\n", endpoint_debug_name(ep));
+					endpoint_error(ep, "socket receive error");
 					return -1;
 				}
 				if (count == 0) {
-					if (ep->debug)
-						printf("%-10s socket received end of file from client\n", endpoint_debug_name(ep));
+					endpoint_debug(ep, "socket received end of file from client");
 
 					ep->read_shutdown_received = 1;
 					if (ep->data_sink_callback) {
@@ -187,8 +179,7 @@ io_mainloop(long timeout)
 					continue;
 				}
 
-				if (ep->debug)
-					printf("%-10s socket received %d bytes\n", endpoint_debug_name(ep), count);
+				endpoint_debug(ep, "socket received %d bytes", count);
 				if (ep->data_sink_callback)
 					ep->data_sink_callback(ep->recvq, ep->app_handle);
 

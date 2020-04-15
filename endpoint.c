@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -39,6 +40,42 @@ endpoint_debug_name(const struct endpoint *ep)
 
 	snprintf(namebuf, sizeof(namebuf), "fd%d", ep->fd);
 	return namebuf;
+}
+
+void
+endpoint_error(const struct endpoint *ep, const char *fmt, ...)
+{
+	if (ep->debug) {
+		va_list ap;
+		int n;
+
+		va_start(ap, fmt);
+		fprintf(stderr, "ERROR on socket %s: ", endpoint_debug_name(ep));
+		fprintf(stderr, fmt, ap);
+		va_end(ap);
+
+		n = strlen(fmt);
+		if (n && fmt[n-1] != '\n')
+			fputs("\n", stderr);
+	}
+}
+
+void
+endpoint_debug(const struct endpoint *ep, const char *fmt, ...)
+{
+	if (ep->debug) {
+		va_list ap;
+		int n;
+
+		va_start(ap, fmt);
+		fprintf(stderr, "%-10s ", endpoint_debug_name(ep));
+		fprintf(stderr, fmt, ap);
+		va_end(ap);
+
+		n = strlen(fmt);
+		if (n && fmt[n-1] != '\n')
+			fputs("\n", stderr);
+	}
 }
 
 void

@@ -57,6 +57,8 @@ struct endpoint_ops {
 };
 
 extern struct endpoint *endpoint_new_socket(int fd);
+extern void		endpoint_error(const struct endpoint *, const char *fmt, ...);
+extern void		endpoint_debug(const struct endpoint *, const char *fmt, ...);
 extern const char *	endpoint_debug_name(const struct endpoint *);
 extern void		endpoint_shutdown_write(struct endpoint *);
 extern void		endpoint_close(struct endpoint *);
