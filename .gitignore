@@ -1,3 +1,8 @@
 *.pyc
 .*
 *.tar
+*.o
+*.a
+sidecar-console
+test-queue
+test-socket
