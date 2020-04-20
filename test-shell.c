@@ -22,9 +22,9 @@ struct io_forwarder {
 };
 
 static void
-io_shell_service_recv_callback(struct queue *q, void *handle)
+io_shell_service_push_data(struct queue *q, struct receiver *r)
 {
-	struct io_forwarder *fwd = handle;
+	struct io_forwarder *fwd = r->handle;
 
 	if (q != NULL) {
 		/* Nothing for us to do. Data has already been queued
@@ -50,12 +50,6 @@ io_shell_service_recv_callback(struct queue *q, void *handle)
 	 * sending half. */
 	if (fwd->socket)
 		endpoint_shutdown_write(fwd->socket);
-}
-
-static void
-io_shell_service_push_data(struct queue *q, struct receiver *r)
-{
-	io_shell_service_recv_callback(q, r->handle);
 }
 
 static void

@@ -14,9 +14,9 @@
 #include "testing.h"
 
 static void
-test_client_send_callback(struct queue *q, void *handle)
+test_client_get_data(struct queue *q, struct sender *s)
 {
-	struct test_client_appdata *appdata = handle;
+	struct test_client_appdata *appdata = s->handle;
 	size_t send_sz;
 
 	send_sz = queue_tailroom(q);
@@ -32,12 +32,6 @@ test_client_send_callback(struct queue *q, void *handle)
 	}
 }
 
-static void
-test_client_get_data(struct queue *q, struct sender *s)
-{
-	test_client_send_callback(q, s->handle);
-}
-
 struct sender *
 test_client_sender(void *handle)
 {
@@ -51,9 +45,9 @@ test_client_sender(void *handle)
 }
 
 static void
-test_client_recv_callback(struct queue *q, void *handle)
+test_client_push_data(struct queue *q, struct receiver *r)
 {
-	struct test_client_appdata *appdata = handle;
+	struct test_client_appdata *appdata = r->handle;
 	size_t recv_sz;
 
 	if (q == NULL) {
@@ -83,12 +77,6 @@ test_client_close_callback(struct endpoint *ep, struct receiver *r)
 
 	test_trace("%s: socket about to be destroyed\n", __func__);
 	appdata->closed = true;
-}
-
-static void
-test_client_push_data(struct queue *q, struct receiver *r)
-{
-	test_client_recv_callback(q, r->handle);
 }
 
 struct receiver *
