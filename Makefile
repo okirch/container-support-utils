@@ -7,13 +7,16 @@ COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I. $(COPT)
 CONSOLE		= sidecar-console
 TESTAPPS	= test-queue \
-		  test-socket
+		  test-socket \
+		  test-shell
 LIB		= libconsole.a
-LIBSRCS		= mainloop.c \
+LIBSRCS		= shell.c \
+		  mainloop.c \
 		  endpoint.c \
 		  queue.c \
 		  buffer.c
 LIBOBJS		= $(LIBSRCS:.c=.o)
+LINK		= -L. -lconsole -lutil
 
 PYVERS		= python2.7
 PYLIBDIR	= /usr/lib/$(PYVERS)/site-packages/suse_sidecar
@@ -37,12 +40,16 @@ $(LIB): $(LIBOBJS)
 	$(AR) crv $@ $(LIBOBJS)
 
 test-queue: test-queue.o test-common.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ test-queue.o test-common.o -L. -lconsole
+	$(CC) $(CFLAGS) -o $@ test-queue.o test-common.o $(LINK)
 
 test-socket: test-socket.o test-common.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ test-socket.o test-common.o -L. -lconsole
+	$(CC) $(CFLAGS) -o $@ test-socket.o test-common.o $(LINK)
 
-sidecar-console: $(LIBOBJS)
+test-shell: test-shell.o test-common.o $(LIB)
+	$(CC) $(CFLAGS) -o $@ test-shell.o test-common.o $(LINK)
+
+sidecar-console: sidecar-console.o $(LIB)
+	$(CC) $(CFLAGS) -o $@ sidecar-console.o $(LINK)
 
 ifeq ($(wildcard .depend), .depend)
 include .depend
