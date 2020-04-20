@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
 #include "buffer.h"
@@ -18,6 +19,22 @@ const char	test_pattern[] =
 const unsigned int test_pattern_len = sizeof(test_pattern) - 1;
 
 static bool		done = false;
+
+bool
+parse_int_arg(const char *name, const char *arg, int *opt_valp)
+{
+	const char *s;
+	long l;
+
+	l = strtol(arg, (char **) &s, 0);
+	if (*s) {
+		fprintf(stderr, "Bad value \"%s\" for option %s\n", arg, name);
+		return false;
+	}
+
+	*opt_valp = l;
+	return true;
+}
 
 static void
 alarm_handler(int dummy)
