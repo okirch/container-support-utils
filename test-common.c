@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include "buffer.h"
+#include "testing.h"
 
 const char	test_pattern[] = 
 	"0123456789abcdefghijklmnopqrstuvwxyz"
@@ -20,6 +21,9 @@ const unsigned int test_pattern_len = sizeof(test_pattern) - 1;
 
 static bool		done = false;
 
+/*
+ * Command line handling
+ */
 bool
 parse_int_arg(const char *name, const char *arg, int *opt_valp)
 {
@@ -34,6 +38,96 @@ parse_int_arg(const char *name, const char *arg, int *opt_valp)
 
 	*opt_valp = l;
 	return true;
+}
+
+static void
+test_usage(int exitval, const struct test_app *app)
+{
+	bool has_names = (app->test_cases[0].name != NULL);
+
+	fprintf(stderr, "%s [-h] [-t timeout] [-s seed]%s\n", app->name,
+			has_names? " [test-name ...]" : "");
+	fprintf(stderr,
+		"-h        show this message\n"
+		"-t timeout\n"
+		"          Test case duration in seconds\n"
+		"-s seed\n"
+		"          Initialize random number generator with seed\n");
+
+	if (has_names) {
+		const struct test_case_info *tc;
+		unsigned int i;
+
+		fprintf(stderr,
+			"\n"
+			"Valid test names:\n");
+		for (i = 0, tc = app->test_cases; i < TEST_CASE_MAX; ++i, ++tc) {
+			if (tc->name)
+				fprintf(stderr, "  %s\n", tc->name);
+		}
+	}
+	exit(exitval);
+}
+
+static int
+test_case_id(const struct test_app *app, const char *test_name)
+{
+	const struct test_case_info *tc;
+	unsigned int i;
+
+	for (i = 0, tc = app->test_cases; i < TEST_CASE_MAX; ++i, ++tc) {
+		if (tc->name && !strcasecmp(test_name, tc->name))
+			return tc->id;
+	}
+
+	fprintf(stderr, "Unknown test case name \"%s\"\n", test_name);
+	test_usage(1, app);
+
+	return -1;
+}
+
+void
+test_parse_arguments(const struct test_app *app, struct test_util_options *opts, int argc, char **argv)
+{
+	int c;
+
+	memset(opts, 0, sizeof(*opts));
+	opts->timeout = 5;
+	opts->tests = ~0U;
+
+	while ((c = getopt(argc, argv, "hs:t:")) != EOF) {
+		switch (c) {
+		case 's':
+			if (!parse_int_arg("seed -s", optarg, &opts->seed))
+				exit(1);
+
+			/* For the log file */
+			printf("Initializing RNG with seed %d\n", opts->seed);
+			srandom(opts->seed);
+			break;
+
+		case 't':
+			if (!parse_int_arg("timeout -t", optarg, &opts->timeout))
+				exit(1);
+			break;
+
+		case 'h':
+			test_usage(0, app);
+		default:
+			test_usage(1, app);
+		}
+	}
+
+	if (optind < argc) {
+		opts->tests = 0;
+
+		while (optind < argc) {
+			int id;
+
+			id = test_case_id(app, argv[optind++]);
+			opts->tests |= (1 << id);
+		}
+	}
 }
 
 static void

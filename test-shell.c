@@ -254,24 +254,6 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 	io_close_all();
 }
 
-static void
-usage(int exitval)
-{
-	fprintf(stderr, "test-shell [-h] [-t timeout] [-s seed] [test-name ...]\n");
-	fprintf(stderr,
-		"-h        show this message\n"
-		"-t timeout\n"
-		"          Test case duration in seconds\n"
-		"-s seed\n"
-		"          Initialize random number generator with seed\n");
-	fprintf(stderr,
-		"\n"
-		"Valid test names:\n"
-		"  cat\n"
-	       );
-	exit(exitval);
-}
-
 enum {
 	TEST_CAT,
 };
@@ -279,54 +261,19 @@ enum {
 int
 main(int argc, char **argv)
 {
-	int opt_timeout = 5, opt_seed;
-	bool opt_seed_set = false;
-	unsigned int opt_tests = ~0U;
-	int c;
+	struct test_app appinfo = {
+		.name = "test-shell",
+		.test_cases = {
+			{ "cat",	TEST_CAT	},
+			{ NULL }
+		},
+	};
+	struct test_util_options opt;
 
-	while ((c = getopt(argc, argv, "hs:t:")) != EOF) {
-		switch (c) {
-		case 's':
-			if (!parse_int_arg("seed -s", optarg, &opt_seed))
-				return 1;
-			opt_seed_set = true;
-			break;
+	test_parse_arguments(&appinfo, &opt, argc, argv);
 
-		case 't':
-			if (!parse_int_arg("timeout -t", optarg, &opt_timeout))
-				return 1;
-			break;
-
-		case 'h':
-			usage(0);
-		default:
-			usage(1);
-		}
-	}
-
-	if (optind < argc) {
-		opt_tests = 0;
-
-		while (optind < argc) {
-			const char *test_name= argv[optind++];
-
-			if (!strcmp(test_name, "cat")) {
-				opt_tests |= (1 << TEST_CAT);
-			} else {
-				fprintf(stderr, "Unknown test case name \"%s\"\n", test_name);
-				usage(1);
-			}
-		}
-	}
-
-	if (opt_seed_set) {
-		/* For the log file */
-		printf("Initializing RNG with seed %d\n", opt_seed);
-		srandom(opt_seed);
-	}
-
-	if (opt_tests & (1 << TEST_CAT))
-		do_cat_test(opt_timeout, true, false);
+	if (opt.tests & (1 << TEST_CAT))
+		do_cat_test(opt.timeout, true, false);
 	printf("All is well.\n");
 	return 0;
 }

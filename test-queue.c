@@ -127,60 +127,22 @@ do_test(unsigned int time, bool random_send, bool random_recv)
 			print_byte_count(recv_pos), nrecvs);
 }
 
-static void
-usage(int exitval)
-{
-	fprintf(stderr, "test-queue [-h] [-t timeout] [-s seed]\n");
-	fprintf(stderr,
-		"-h        show this message\n"
-		"-t timeout\n"
-		"          Test case duration in seconds\n"
-		"-s seed\n"
-		"          Initialize random number generator with seed\n");
-	exit(exitval);
-}
-
 int
 main(int argc, char **argv)
 {
-	int opt_timeout = 5, opt_seed;
-	bool opt_seed_set = false;
-	int c;
+	struct test_app appinfo = {
+		.name = "test-shell",
+		.test_cases = {
+			{ NULL }
+		},
+	};
+	struct test_util_options opt;
 
-	while ((c = getopt(argc, argv, "hs:t:")) != EOF) {
-		switch (c) {
-		case 's':
-			if (!parse_int_arg("seed -s", optarg, &opt_seed))
-				return 1;
-			opt_seed_set = true;
-			break;
+	test_parse_arguments(&appinfo, &opt, argc, argv);
 
-		case 't':
-			if (!parse_int_arg("timeout -t", optarg, &opt_timeout))
-				return 1;
-			break;
-
-		case 'h':
-			usage(0);
-		default:
-			usage(1);
-		}
-	}
-
-	if (optind < argc) {
-		fprintf(stderr, "Unexpected command line argument(s)\n");
-		usage(1);
-	}
-
-	if (opt_seed_set) {
-		/* For the log file */
-		printf("Initializing RNG with seed %d\n", opt_seed);
-		srandom(opt_seed);
-	}
-
-	do_test(opt_timeout, true, false);
-	do_test(opt_timeout, true, true);
-	do_test(opt_timeout, false, true);
+	do_test(opt.timeout, true, false);
+	do_test(opt.timeout, true, true);
+	do_test(opt.timeout, false, true);
 	printf("All is well.\n");
 
 	return 0;

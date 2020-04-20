@@ -1,9 +1,30 @@
 #ifndef _TESTING_H
 #define _TESTING_H
 
+struct test_case_info {
+	const char *	name;
+	unsigned int	id;
+};
+
+#define TEST_CASE_MAX	16
+
+struct test_app {
+	const char *	name;
+
+	struct test_case_info test_cases[TEST_CASE_MAX];
+};
+
+struct test_util_options {
+	int		timeout;
+	int		seed;
+
+	unsigned int	tests;
+};
+
 extern const char	test_pattern[];
 extern const unsigned int test_pattern_len;
 
+extern void		test_parse_arguments(const struct test_app *, struct test_util_options *, int argc, char **argv);
 extern bool		parse_int_arg(const char *name, const char *arg, int *opt_valp);
 extern const char *	print_byte_count(unsigned long);
 
