@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define BUF_SZ		1024
 #define QUEUE_SZ	(64 * BUF_SZ)
