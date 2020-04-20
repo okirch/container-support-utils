@@ -111,7 +111,16 @@ __endpoint_poll_generic(const struct endpoint *ep, struct pollfd *pfd, unsigned 
 	if (queue_available(&ep->sendq) == 0)
 		poll_mask &= ~POLLOUT;
 
-	/* If we have no room to queue more incoming data, we shouldn't wait for POLLIN */
+	/* If the receive queue has been changed to NULL, this means we have nothing
+	 * to write to anymore (and we need to discard all incoming data). In order
+	 * not to miss the client closing the connection, we DO assert POLLIN in this
+	 * situation.
+	 *
+	 * If recvq is non-NULL, but we have no room to queue more incoming data,
+	 * we shouldn't wait for POLLIN */
+	if (ep->recvq == NULL) {
+		/* NOP */
+	} else
 	if (queue_tailroom(ep->recvq) == 0)
 		poll_mask &= ~POLLIN;
 
