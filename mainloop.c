@@ -170,7 +170,7 @@ io_mainloop(long timeout)
 					return -1;
 				}
 				if (count == 0) {
-					endpoint_debug(ep, "socket received end of file from client");
+					endpoint_debug(ep, "socket received end of file from peer");
 
 					ep->read_shutdown_received = 1;
 					if (ep->data_sink_callback) {
