@@ -42,20 +42,40 @@ struct endpoint {
 	 */
 	int		poll_mask;
 
-	void		(*data_source_callback)(struct queue *, void *);
-	void		(*data_sink_callback)(struct queue *, void *);
-	void		(*close_callback)(struct endpoint *, void *);
-	void *		app_handle;
+	struct sender *	sender;
+	struct receiver *receiver;
 
 	const struct endpoint_ops *ops;
 };
 
+/* These should really be called transport_ops */
 struct endpoint_ops {
 	int		(*poll)(const struct endpoint *, struct pollfd *, unsigned int mask);
 	size_t		(*send_size_hint)(const struct endpoint *);
 	int		(*send)(struct endpoint *, const void *, size_t);
 	int		(*recv)(struct endpoint *, void *, size_t);
 	int		(*shutdown_write)(struct endpoint *);
+};
+
+struct application_ops {
+	void		(*data_source_callback)(struct queue *, void *);
+	void		(*data_sink_callback)(struct queue *, void *);
+	void		(*close_callback)(struct endpoint *, void *);
+};
+
+struct sender {
+	void *		handle;
+	void		(*get_data)(struct queue *, struct sender *);
+
+	struct queue	queue;
+};
+
+struct receiver {
+	void *		handle;
+	void		(*push_data)(struct queue *, struct receiver *);
+	void		(*close_callback)(struct endpoint *, struct receiver *);
+
+	struct queue	queue;
 };
 
 extern struct endpoint *endpoint_new_socket(int fd);
@@ -112,6 +132,44 @@ static inline int
 endpoint_recv(struct endpoint *ep, void *p, size_t len)
 {
 	return ep->ops->recv(ep, p, len);
+}
+
+static inline void
+endpoint_data_source_callback(struct endpoint *ep)
+{
+	struct sender *sender = ep->sender;
+
+	if (sender && sender->get_data)
+		sender->get_data(&ep->sendq, sender);
+}
+
+static inline void
+endpoint_data_sink_callback(struct endpoint *ep)
+{
+	struct receiver *receiver = ep->receiver;
+
+	if (receiver && receiver->push_data)
+		receiver->push_data(ep->recvq, receiver);
+}
+
+static inline bool
+endpoint_eof_callback(struct endpoint *ep)
+{
+	struct receiver *receiver = ep->receiver;
+
+	if (!receiver || !receiver->push_data)
+		return false;
+
+	receiver->push_data(NULL, receiver);
+}
+
+static inline void
+endpoint_close_callback(struct endpoint *ep)
+{
+	struct receiver *receiver = ep->receiver;
+
+	if (receiver && receiver->close_callback)
+		receiver->close_callback(ep, receiver);
 }
 
 #endif /* _ENDPOINT_H */

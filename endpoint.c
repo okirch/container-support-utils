@@ -407,9 +407,9 @@ endpoint_eof_from_peer(struct endpoint *ep)
 	ep->read_shutdown_received = 1;
 	ep->poll_mask &= ~POLLIN;
 
-	if (ep->data_sink_callback) {
-		ep->data_sink_callback(NULL, ep->app_handle);
-	} else {
+	if (!endpoint_eof_callback(ep)) {
+		/* No callback registered for EOF handling. Just declare
+		 * this endpoint dead. */
 		endpoint_shutdown_write(ep);
 	}
 

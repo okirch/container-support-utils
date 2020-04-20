@@ -92,8 +92,7 @@ io_close_dead(void)
 			endpoint_debug(ep, "socket is a zombie");
 			dead[ndead++] = ep;
 
-			if (ep->close_callback)
-				ep->close_callback(ep, ep->app_handle);
+			endpoint_close_callback(ep);
 		} else {
 			io_endpoints[j++] = ep;
 		}
@@ -150,8 +149,8 @@ io_mainloop(long timeout)
 		for (i = 0; i < io_endpoint_count; ++i) {
 			struct endpoint *ep = io_endpoints[i];
 
-			if (ep->data_source_callback && !ep->write_shutdown_requested)
-				ep->data_source_callback(&ep->sendq, ep->app_handle);
+			if (!ep->write_shutdown_requested)
+				endpoint_data_source_callback(ep);
 
 			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
 				if (ep->debug) {
@@ -222,9 +221,7 @@ io_mainloop(long timeout)
 				}
 
 				endpoint_debug(ep, "socket received %d bytes", count);
-				if (ep->data_sink_callback)
-					ep->data_sink_callback(ep->recvq, ep->app_handle);
-
+				endpoint_data_sink_callback(ep);
 			}
 		}
 

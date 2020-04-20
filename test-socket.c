@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <assert.h>
+
 #include "endpoint.h"
 #include "testing.h"
 
@@ -48,11 +49,11 @@ do_pipe_test(unsigned int time, bool random_send, bool random_recv)
 
 	/* The first of the two sockets is the sender */
 	ep = test_client_create(pair[0], "sender", &appdata);
-	ep->data_sink_callback = NULL;
+	ep->receiver = NULL;
 
 	/* The second socket is the receiver. */
 	ep = test_client_create(pair[1], "receiver", &appdata);
-	ep->data_source_callback = NULL;
+	ep->sender = NULL;
 
 	io_mainloop(time * 1000);
 

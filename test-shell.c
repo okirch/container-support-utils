@@ -53,9 +53,15 @@ io_shell_service_recv_callback(struct queue *q, void *handle)
 }
 
 static void
-io_shell_service_close_callback(struct endpoint *ep, void *handle)
+io_shell_service_push_data(struct queue *q, struct receiver *r)
 {
-	struct io_forwarder *fwd = handle;
+	io_shell_service_recv_callback(q, r->handle);
+}
+
+static void
+io_shell_service_close_callback(struct endpoint *ep, struct receiver *r)
+{
+	struct io_forwarder *fwd = r->handle;
 
 	if (fwd->socket == ep)
 		fwd->socket = NULL;
@@ -71,6 +77,31 @@ io_shell_service_close_callback(struct endpoint *ep, void *handle)
 		free(fwd);
 }
 
+static struct receiver *
+shell_service_receiver(struct io_forwarder *fwd)
+{
+	struct receiver *r;
+
+	r = calloc(1, sizeof(*r));
+	r->handle = fwd;
+	r->push_data = io_shell_service_push_data;
+	r->close_callback = io_shell_service_close_callback;
+
+	return r;
+}
+
+static struct receiver *
+shell_pty_receiver(struct io_forwarder *fwd)
+{
+	struct receiver *r;
+
+	r = calloc(1, sizeof(*r));
+	r->handle = fwd;
+	r->close_callback = io_shell_service_close_callback;
+
+	return r;
+}
+
 struct io_forwarder *
 io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 {
@@ -81,13 +112,10 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 	fwd->socket = socket;
 	fwd->process = process;
 
-	socket->data_sink_callback = io_shell_service_recv_callback;
-	socket->close_callback = io_shell_service_close_callback;
-	socket->app_handle = fwd;
+	socket->receiver = shell_service_receiver(fwd);
 
 	pty = endpoint_new_pty(process->master_fd);
-	pty->close_callback = io_shell_service_close_callback;
-	pty->app_handle = fwd;
+	pty->receiver = shell_pty_receiver(fwd);
 
 	fwd->pty = pty;
 

@@ -51,6 +51,7 @@ struct test_client_appdata {
 	struct queue	recvq;
 };
 
+extern struct application_ops  test_client_application_ops;
 
 extern void		test_client_appdata_init(struct test_client_appdata *appdata, bool random_send, bool random_recv);
 extern struct endpoint *test_client_create(int fd, const char *name, struct test_client_appdata *appdata);

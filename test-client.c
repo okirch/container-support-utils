@@ -33,6 +33,24 @@ test_client_send_callback(struct queue *q, void *handle)
 }
 
 static void
+test_client_get_data(struct queue *q, struct sender *s)
+{
+	test_client_send_callback(q, s->handle);
+}
+
+struct sender *
+test_client_sender(void *handle)
+{
+	struct sender *s;
+
+	s = calloc(1, sizeof(*s));
+	s->handle = handle;
+	s->get_data = test_client_get_data;
+
+	return s;
+}
+
+static void
 test_client_recv_callback(struct queue *q, void *handle)
 {
 	struct test_client_appdata *appdata = handle;
@@ -56,15 +74,34 @@ test_client_recv_callback(struct queue *q, void *handle)
 }
 
 static void
-test_client_close_callback(struct endpoint *ep, void *handle)
+test_client_close_callback(struct endpoint *ep, struct receiver *r)
 {
-	struct test_client_appdata *appdata = handle;
+	struct test_client_appdata *appdata = r->handle;
 
 	if (test_progress)
 		write(1, "\n", 1);
 
 	test_trace("%s: socket about to be destroyed\n", __func__);
 	appdata->closed = true;
+}
+
+static void
+test_client_push_data(struct queue *q, struct receiver *r)
+{
+	test_client_recv_callback(q, r->handle);
+}
+
+struct receiver *
+test_client_receiver(void *handle)
+{
+	struct receiver *s;
+
+	s = calloc(1, sizeof(*s));
+	s->handle = handle;
+	s->push_data = test_client_push_data;
+	s->close_callback = test_client_close_callback;
+
+	return s;
 }
 
 void
@@ -94,10 +131,8 @@ test_client_create(int fd, const char *name, struct test_client_appdata *appdata
 	ep->debug_name = name;
 	ep->recvq = &appdata->recvq;
 
-	ep->data_source_callback = test_client_send_callback;
-	ep->data_sink_callback = test_client_recv_callback;
-	ep->close_callback = test_client_close_callback;
-	ep->app_handle = appdata;
+	ep->sender = test_client_sender(appdata);
+	ep->receiver = test_client_receiver(appdata);
 
 	ep->debug = test_tracing;
 
