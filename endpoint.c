@@ -93,10 +93,8 @@ endpoint_shutdown_write(struct endpoint *ep)
 {
 	ep->write_shutdown_requested = 1;
 
-	/* FIXME: this is socket specific */
 	if (queue_available(&ep->sendq) == 0) {
-		if (shutdown(ep->fd, SHUT_WR) < 0)
-			perror("shutdown");
+		ep->ops->shutdown_write(ep);
 		ep->write_shutdown_sent = 1;
 	}
 }
@@ -175,11 +173,23 @@ __endpoint_socket_recv(struct endpoint *ep, void *p, size_t len)
 	return n;
 }
 
+static int
+__endpoint_socket_shutdown_write(struct endpoint *ep)
+{
+	if (shutdown(ep->fd, SHUT_WR) < 0) {
+		perror("shutdown");
+		return -1;
+	}
+
+	return 0;
+}
+
 static struct endpoint_ops __endpoint_socket_ops = {
 	.poll		= __endpoint_poll_generic,
 	.send_size_hint	= __endpoint_socket_send_size_hint,
 	.send		= __endpoint_socket_send,
 	.recv		= __endpoint_socket_recv,
+	.shutdown_write	= __endpoint_socket_shutdown_write,
 };
 
 struct endpoint *

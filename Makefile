@@ -18,7 +18,7 @@ LIBOBJS		= $(LIBSRCS:.c=.o)
 PYVERS		= python2.7
 PYLIBDIR	= /usr/lib/$(PYVERS)/site-packages/suse_sidecar
 
-all: $(PYAPP) $(PYMODULES) $(CONSOLE)
+all: $(PYAPP) $(PYMODULES) $(TESTAPPS) $(CONSOLE)
 
 tests:	$(TESTAPPS)
 

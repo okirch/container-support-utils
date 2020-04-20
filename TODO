@@ -16,3 +16,7 @@ Things to be done
 
  - add a /fs service that lets you view random files inside the
    running container
+
+Console
+
+ - use libssh to provide session layer

@@ -55,6 +55,7 @@ struct endpoint_ops {
 	size_t		(*send_size_hint)(const struct endpoint *);
 	int		(*send)(struct endpoint *, const void *, size_t);
 	int		(*recv)(struct endpoint *, void *, size_t);
+	int		(*shutdown_write)(struct endpoint *);
 };
 
 extern struct endpoint *endpoint_new_socket(int fd);
