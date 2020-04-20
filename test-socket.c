@@ -59,10 +59,12 @@ struct client_appdata {
 	unsigned int	nsends;
 	unsigned int	nrecvs;
 
+	bool		closed;
+
 	struct queue	recvq;
 };
 
-void
+static void
 client_send_callback(struct queue *q, void *handle)
 {
 	struct client_appdata *appdata = handle;
@@ -81,7 +83,7 @@ client_send_callback(struct queue *q, void *handle)
 	}
 }
 
-void
+static void
 client_recv_callback(struct queue *q, void *handle)
 {
 	struct client_appdata *appdata = handle;
@@ -105,6 +107,17 @@ client_recv_callback(struct queue *q, void *handle)
 #if !defined(TRACE) && defined(PROGRESS)
 	write(1, "+", 1);
 #endif
+}
+
+static void
+client_close_callback(struct endpoint *ep, void *handle)
+{
+	struct client_appdata *appdata = handle;
+
+#ifdef TRACE
+	printf("%s: socket about to be destroyed\n", __func__);
+#endif
+	appdata->closed = true;
 }
 
 struct endpoint *
@@ -135,6 +148,7 @@ create_client(int fd, const char *name, struct client_appdata *appdata)
 
 	ep->data_source_callback = client_send_callback;
 	ep->data_sink_callback = client_recv_callback;
+	ep->close_callback = client_close_callback;
 	ep->app_handle = appdata;
 
 #ifdef TRACE
@@ -271,6 +285,12 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 
 	assert(appdata.recv_pos <= appdata.send_pos);
 	/* assert(appdata.send_pos - appdata.recv_pos <= QUEUE_SZ); */
+
+	if (!appdata.closed) {
+		fprintf(stderr, "Client socket did not receive EOF from server\n");
+		exit(99);
+	}
+	printf("Client socket received EOF from server\n");
 
 	printf("OK: sent %lu bytes in %u chunks; received %lu bytes in %u chunks. %lu bytes still in flight.\n",
 			appdata.send_pos, appdata.nsends, appdata.recv_pos, appdata.nrecvs,

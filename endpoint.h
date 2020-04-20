@@ -44,6 +44,7 @@ struct endpoint {
 
 	void		(*data_source_callback)(struct queue *, void *);
 	void		(*data_sink_callback)(struct queue *, void *);
+	void		(*close_callback)(struct endpoint *, void *);
 	void *		app_handle;
 
 	const struct endpoint_ops *ops;

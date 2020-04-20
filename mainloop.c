@@ -47,6 +47,9 @@ io_close_dead(void)
 		if (ep->write_shutdown_sent && ep->read_shutdown_received) {
 			endpoint_debug(ep, "socket is a zombie");
 			dead[ndead++] = ep;
+
+			if (ep->close_callback)
+				ep->close_callback(ep, ep->app_handle);
 		} else {
 			io_endpoints[j++] = ep;
 		}
