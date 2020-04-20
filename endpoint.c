@@ -222,6 +222,96 @@ endpoint_new_socket(int fd)
 	return ep;
 }
 
+/*
+ * PTY endpoint
+ */
+static size_t
+__endpoint_pty_send_size_hint(const struct endpoint *ep)
+{
+	unsigned int size_hint = 0;
+
+	if (ep->send_size_hint) {
+		int bytes;
+
+		if (ioctl(ep->fd, TIOCOUTQ, &bytes) >= 0
+		 && (unsigned int) bytes <= ep->send_size_hint) {
+			size_hint = ep->send_size_hint - bytes;
+		}
+
+	}
+
+	if (size_hint == 0)
+		size_hint = 128; /* arbitrary */
+
+	return size_hint;
+}
+
+static int
+__endpoint_pty_send(struct endpoint *ep, const void *p, size_t len)
+{
+	int n;
+
+	n = write(ep->fd, p, len);
+	if (n < 0)
+		perror("pty send");
+
+	endpoint_debug(ep, "pty_send(%u bytes) = %d", len, n);
+	return n;
+}
+
+static int
+__endpoint_pty_recv(struct endpoint *ep, void *p, size_t len)
+{
+	int n;
+
+	n = read(ep->fd, p, len);
+	if (n < 0)
+		perror("pty recv");
+
+	endpoint_debug(ep, "pty_recv(%u bytes) = %d", len, n);
+	return n;
+}
+
+static int
+__endpoint_pty_shutdown_write(struct endpoint *ep)
+{
+	/* Not implemented yet */
+	return 0;
+}
+
+static struct endpoint_ops __endpoint_pty_ops = {
+	.poll		= __endpoint_poll_generic,
+	.send_size_hint	= __endpoint_pty_send_size_hint,
+	.send		= __endpoint_pty_send,
+	.recv		= __endpoint_pty_recv,
+	.shutdown_write	= __endpoint_pty_shutdown_write,
+};
+
+struct endpoint *
+endpoint_new_pty(int fd)
+{
+	struct endpoint *ep;
+	int flags;
+
+	if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
+		fprintf(stderr, "fcntl(pty, F_GETFL): %m\n");
+		return NULL;
+	}
+
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+		fprintf(stderr, "fcntl(pty, F_SETFL, O_NONBLOCK): %m\n");
+		return NULL;
+	}
+
+	ep = endpoint_new(fd, &__endpoint_pty_ops);
+
+	/* There's an ioctl for inquiring the buffer size */
+	ep->send_size_hint = 4096;
+
+	ep->poll_mask = POLLIN | POLLOUT;
+	return ep;
+}
+
 int
 endpoint_transmit(struct endpoint *ep)
 {
