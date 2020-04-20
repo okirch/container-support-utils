@@ -5,6 +5,7 @@ extern const char	test_pattern[];
 extern const unsigned int test_pattern_len;
 
 extern bool		parse_int_arg(const char *name, const char *arg, int *opt_valp);
+extern const char *	print_byte_count(unsigned long);
 
 extern bool *		test_set_alarm(unsigned int nsecs);
 extern unsigned int	test_random_size(unsigned int sz);

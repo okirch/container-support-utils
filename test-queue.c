@@ -122,8 +122,9 @@ do_test(unsigned int time, bool random_send, bool random_recv)
 
 	assert(send_pos == recv_pos);
 
-	printf("OK: sent %lu bytes in %u chunks; received %lu bytes in %u chunks\n",
-			send_pos, nsends, recv_pos, nrecvs);
+	printf("OK: sent %s bytes in %u chunks; received %s bytes in %u chunks\n",
+			print_byte_count(send_pos), nsends,
+			print_byte_count(recv_pos), nrecvs);
 }
 
 static void

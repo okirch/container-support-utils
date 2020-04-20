@@ -120,6 +120,15 @@ client_close_callback(struct endpoint *ep, void *handle)
 	appdata->closed = true;
 }
 
+void
+client_print_stats(const struct client_appdata *appdata)
+{
+	printf("OK: sent %s bytes in %u chunks; received %s bytes in %u chunks. %lu bytes still in flight.\n",
+			print_byte_count(appdata->send_pos), appdata->nsends,
+			print_byte_count(appdata->recv_pos), appdata->nrecvs,
+			appdata->send_pos - appdata->recv_pos);
+}
+
 struct endpoint *
 create_echo_service(int fd)
 {
@@ -200,9 +209,7 @@ do_pipe_test(unsigned int time, bool random_send, bool random_recv)
 	assert(appdata.recv_pos <= appdata.send_pos);
 	/* assert(appdata.send_pos - appdata.recv_pos <= QUEUE_SZ); */
 
-	printf("OK: sent %lu bytes in %u chunks; received %lu bytes in %u chunks. %lu bytes still in flight.\n",
-			appdata.send_pos, appdata.nsends, appdata.recv_pos, appdata.nrecvs,
-			appdata.send_pos - appdata.recv_pos);
+	client_print_stats(&appdata);
 
 	io_close_all();
 }
@@ -237,9 +244,7 @@ do_echo_test(unsigned int time, bool random_send, bool random_recv)
 	assert(appdata.recv_pos <= appdata.send_pos);
 	/* assert(appdata.send_pos - appdata.recv_pos <= QUEUE_SZ); */
 
-	printf("OK: sent %lu bytes in %u chunks; received %lu bytes in %u chunks. %lu bytes still in flight.\n",
-			appdata.send_pos, appdata.nsends, appdata.recv_pos, appdata.nrecvs,
-			appdata.send_pos - appdata.recv_pos);
+	client_print_stats(&appdata);
 
 	io_close_all();
 }
@@ -292,9 +297,7 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 	}
 	printf("Client socket received EOF from server\n");
 
-	printf("OK: sent %lu bytes in %u chunks; received %lu bytes in %u chunks. %lu bytes still in flight.\n",
-			appdata.send_pos, appdata.nsends, appdata.recv_pos, appdata.nrecvs,
-			appdata.send_pos - appdata.recv_pos);
+	client_print_stats(&appdata);
 
 	io_close_all();
 }

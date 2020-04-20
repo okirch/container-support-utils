@@ -141,3 +141,36 @@ test_verify_pattern(unsigned long *pos, const unsigned char *buffer, unsigned in
 
 	return true;
 }
+
+const char *
+print_byte_count(unsigned long count)
+{
+	static struct scaling {
+		unsigned long	factor;
+		const char *	scale;
+	} scales[] = {
+		{	1024 * 1024 * 1024,	"G"	},
+		{	1024 * 1024,		"M"	},
+		{	1024,			"k"	},
+		{	1,			""	},
+	};
+
+	static char buffer[4][32];
+	static unsigned int bnum = 0;
+	struct scaling *s;
+	char *buf;
+
+	buf = buffer[bnum];
+
+	for (s = scales; ; ++s) {
+		if (count >= s->factor) {
+			snprintf(buf, sizeof(buffer[0]), "%.2f %sbytes",
+					count * 1.0 / s->factor,
+					s->scale);
+			break;
+		}
+	}
+
+	bnum = (bnum + 1) % 4;
+	return buf;
+}
