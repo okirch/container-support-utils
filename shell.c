@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <termios.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include <pty.h>
 
 #include "shell.h"
@@ -111,6 +112,13 @@ start_shell(const char *cmd, char * const * argv, int procfd)
 	processes = ret;
 
 	return ret;
+}
+
+void
+process_hangup(struct console_slave *process)
+{
+	close(process->master_fd);
+        process->master_fd = open("/dev/null", O_RDWR);
 }
 
 static int

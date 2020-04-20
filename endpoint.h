@@ -70,10 +70,22 @@ extern unsigned int	endpoint_tailroom(const struct endpoint *ep);
 extern int		endpoint_enqueue(struct endpoint *ep, const void *, size_t);
 extern int		endpoint_transmit(struct endpoint *ep);
 extern int		endpoint_receive(struct endpoint *ep);
+extern void		endpoint_eof_from_peer(struct endpoint *ep);
 
 extern void		io_register_endpoint(struct endpoint *ep);
 extern int		io_mainloop(long timeout);
 extern void		io_close_all(void);
+
+struct io_callback {
+	void		(*callback_fn)(void *app_handle);
+	void *		app_handle;
+
+	struct io_callback **prev;
+	struct io_callback *next;
+	bool		posted;
+};
+
+extern void		io_register_callback(struct io_callback *);
 
 static inline size_t
 endpoint_send_size_hint(const struct endpoint *ep)

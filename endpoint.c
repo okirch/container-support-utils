@@ -91,6 +91,9 @@ endpoint_free(struct endpoint *ep)
 void
 endpoint_shutdown_write(struct endpoint *ep)
 {
+	if (!ep->write_shutdown_requested)
+		endpoint_debug(ep, "write-shutdown requested");
+
 	ep->write_shutdown_requested = 1;
 
 	if (queue_available(&ep->sendq) == 0) {
@@ -376,6 +379,12 @@ endpoint_receive(struct endpoint *ep)
 	void *buf;
 	int n;
 
+	if (ep->recvq == NULL) {
+		/* Discard incoming data */
+		buf = alloca(4096);
+		return endpoint_recv(ep, buf, 4096);
+	}
+
 	recv_sz = queue_tailroom(ep->recvq);
 	if (recv_sz == 0) {
 		/* XXX complain */
@@ -390,4 +399,19 @@ endpoint_receive(struct endpoint *ep)
 		queue_append(ep->recvq, buf, n);
 
 	return n;
+}
+
+void
+endpoint_eof_from_peer(struct endpoint *ep)
+{
+	ep->read_shutdown_received = 1;
+	ep->poll_mask &= ~POLLIN;
+
+	if (ep->data_sink_callback) {
+		ep->data_sink_callback(NULL, ep->app_handle);
+	} else {
+		endpoint_shutdown_write(ep);
+	}
+
+	ep->recvq = NULL;
 }
