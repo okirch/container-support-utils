@@ -19,6 +19,9 @@ const char	test_pattern[] =
 	;
 const unsigned int test_pattern_len = sizeof(test_pattern) - 1;
 
+bool			test_tracing;
+bool			test_progress;
+
 static bool		done = false;
 
 /*
@@ -45,14 +48,16 @@ test_usage(int exitval, const struct test_app *app)
 {
 	bool has_names = (app->test_cases[0].name != NULL);
 
-	fprintf(stderr, "%s [-h] [-t timeout] [-s seed]%s\n", app->name,
+	fprintf(stderr, "%s [-h] [-t timeout] [-s seed] [-d]%s\n", app->name,
 			has_names? " [test-name ...]" : "");
 	fprintf(stderr,
 		"-h        show this message\n"
 		"-t timeout\n"
 		"          Test case duration in seconds\n"
 		"-s seed\n"
-		"          Initialize random number generator with seed\n");
+		"          Initialize random number generator with seed\n"
+		"-d        Show progress of test (some test cases only)\n"
+		"-p        Enable debugging to trace the test progress\n");
 
 	if (has_names) {
 		const struct test_case_info *tc;
@@ -95,8 +100,16 @@ test_parse_arguments(const struct test_app *app, struct test_util_options *opts,
 	opts->timeout = 5;
 	opts->tests = ~0U;
 
-	while ((c = getopt(argc, argv, "hs:t:")) != EOF) {
+	while ((c = getopt(argc, argv, "hdps:t:")) != EOF) {
 		switch (c) {
+		case 'd':
+			test_tracing = true;
+			break;
+
+		case 'p':
+			test_progress = true;
+			break;
+
 		case 's':
 			if (!parse_int_arg("seed -s", optarg, &opts->seed))
 				exit(1);
@@ -116,6 +129,11 @@ test_parse_arguments(const struct test_app *app, struct test_util_options *opts,
 		default:
 			test_usage(1, app);
 		}
+	}
+
+	if (test_tracing && test_progress) {
+		fprintf(stderr, "You can use only one of -d (debug) and -p (progress)\n");
+		test_usage(1, app);
 	}
 
 	if (optind < argc) {

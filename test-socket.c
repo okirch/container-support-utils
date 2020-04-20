@@ -11,17 +11,12 @@
 #include "endpoint.h"
 #include "testing.h"
 
-#undef TRACE
-#undef PROGRESS
-
 static void
 do_queue_pattern(struct queue *q, unsigned long *pos, unsigned int count)
 {
 	void *buf = alloca(count);
 
-#ifdef TRACE
-	printf("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
-#endif
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
 
 	memset(buf, '^', count);
 	test_generate_pattern(pos, buf, count);
@@ -36,9 +31,7 @@ do_recv_pattern(struct queue *q, unsigned long *pos, unsigned int count)
 	const unsigned char *p;
 	unsigned long fail_pos;
 
-#ifdef TRACE
-	printf("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
-#endif
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
 
 	p = queue_peek(q, buf, count);
 	if (!test_verify_pattern(pos, p, count, &fail_pos)) {
@@ -77,9 +70,9 @@ client_send_callback(struct queue *q, void *handle)
 	if (send_sz) {
 		do_queue_pattern(q, &appdata->send_pos, send_sz);
 		appdata->nsends++;
-#if !defined(TRACE) && defined(PROGRESS)
-		write(1, ".", 1);
-#endif
+
+		if (test_progress)
+			write(1, ".", 1);
 	}
 }
 
@@ -95,18 +88,16 @@ client_recv_callback(struct queue *q, void *handle)
 	}
 
 	recv_sz = queue_available(q);
-#ifdef TRACE
-	printf("%s: %lu bytes of data available\n", __func__, recv_sz);
-#endif
+
+	test_trace("%s: %lu bytes of data available\n", __func__, recv_sz);
 	if (appdata->random_recv)
 		recv_sz = test_random_size(recv_sz);
 
 	do_recv_pattern(q, &appdata->recv_pos, recv_sz);
 	appdata->nrecvs++;
 
-#if !defined(TRACE) && defined(PROGRESS)
-	write(1, "+", 1);
-#endif
+	if (test_progress)
+		write(1, "+", 1);
 }
 
 static void
@@ -114,9 +105,7 @@ client_close_callback(struct endpoint *ep, void *handle)
 {
 	struct client_appdata *appdata = handle;
 
-#ifdef TRACE
-	printf("%s: socket about to be destroyed\n", __func__);
-#endif
+	test_trace("%s: socket about to be destroyed\n", __func__);
 	appdata->closed = true;
 }
 
@@ -138,9 +127,7 @@ create_echo_service(int fd)
 	ep->debug_name = "echo-service";
 	ep->recvq = &ep->sendq;
 
-#ifdef TRACE
-	ep->debug = true;
-#endif
+	ep->debug = test_tracing;
 
 	io_register_endpoint(ep);
 	return ep;
@@ -160,9 +147,7 @@ create_client(int fd, const char *name, struct client_appdata *appdata)
 	ep->close_callback = client_close_callback;
 	ep->app_handle = appdata;
 
-#ifdef TRACE
-	ep->debug = true;
-#endif
+	ep->debug = test_tracing;
 
 	io_register_endpoint(ep);
 	return ep;

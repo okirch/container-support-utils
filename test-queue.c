@@ -8,8 +8,6 @@
 #include "buffer.h"
 #include "testing.h"
 
-#undef TRACE
-
 static void
 __show_corrupt_buffer(struct queue *q, unsigned int stream_pos, unsigned int i)
 {
@@ -47,9 +45,7 @@ do_queue_pattern(struct queue *q, unsigned long *pos, unsigned int count)
 {
 	void *buf = alloca(count);
 
-#ifdef TRACE
-	printf("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
-#endif
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
 
 	memset(buf, '^', count);
 	test_generate_pattern(pos, buf, count);
@@ -65,9 +61,7 @@ do_recv_pattern(struct queue *q, unsigned long *pos, unsigned int count)
 	const unsigned char *p;
 	unsigned long fail_pos;
 
-#ifdef TRACE
-	printf("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
-#endif
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
 
 	p = queue_peek(q, buf, count);
 	if (!test_verify_pattern(pos, p, count, &fail_pos)) {
