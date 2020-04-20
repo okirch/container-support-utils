@@ -150,6 +150,7 @@ io_mainloop(long timeout)
 					return -1;
 				}
 
+				endpoint_debug(ep, "socket transmitted %d bytes", count);
 				if (ep->write_shutdown_requested && !ep->write_shutdown_sent)
 					endpoint_shutdown_write(ep);
 			}

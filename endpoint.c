@@ -68,8 +68,8 @@ endpoint_debug(const struct endpoint *ep, const char *fmt, ...)
 		int n;
 
 		va_start(ap, fmt);
-		fprintf(stderr, "%-10s ", endpoint_debug_name(ep));
-		fprintf(stderr, fmt, ap);
+		fprintf(stderr, "%-20s ", endpoint_debug_name(ep));
+		vfprintf(stderr, fmt, ap);
 		va_end(ap);
 
 		n = strlen(fmt);
