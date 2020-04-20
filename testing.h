@@ -37,6 +37,28 @@ extern void		test_generate_pattern(unsigned long *pos, void *buffer, unsigned in
 extern bool		test_verify_pattern(unsigned long *pos, const unsigned char *buffer, unsigned int count,
 				unsigned long *fail_pos);
 
+struct test_client_appdata {
+	bool		random_send;
+	bool		random_recv;
+	unsigned long	send_pos;
+	unsigned long	recv_pos;
+
+	unsigned int	nsends;
+	unsigned int	nrecvs;
+
+	bool		closed;
+
+	struct queue	recvq;
+};
+
+
+extern void		test_client_appdata_init(struct test_client_appdata *appdata, bool random_send, bool random_recv);
+extern struct endpoint *test_client_create(int fd, const char *name, struct test_client_appdata *appdata);
+extern void		test_client_queue_pattern(struct queue *q, unsigned long *pos, unsigned int count);
+extern void		test_client_recv_pattern(struct queue *q, unsigned long *pos, unsigned int count);
+extern void		test_client_print_stats(const struct test_client_appdata *appdata);
+
+
 #define test_trace(...) \
 	if (test_tracing) do { \
 		fprintf(stderr, __VA_ARGS__); \

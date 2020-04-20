@@ -177,6 +177,9 @@ test_random_size(unsigned int sz)
 	return rsz;
 }
 
+/*
+ * Pattern send and receive functions
+ */
 static int
 pattern_offset(unsigned char cc)
 {
@@ -252,6 +255,71 @@ test_verify_pattern(unsigned long *pos, const unsigned char *buffer, unsigned in
 	}
 
 	return true;
+}
+
+void
+test_client_queue_pattern(struct queue *q, unsigned long *pos, unsigned int count)
+{
+	void *buf = alloca(count);
+
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
+
+	memset(buf, '^', count);
+	test_generate_pattern(pos, buf, count);
+
+	queue_append(q, buf, count);
+}
+
+static void
+__show_corrupt_buffer(struct queue *q, unsigned int stream_pos, unsigned int i)
+{
+	struct buf *bp;
+	unsigned int k = 0;
+
+	for (bp = q->head; bp; bp = bp->next, ++k) {
+		unsigned int avail = buf_available(bp);
+		const unsigned char *data;
+		unsigned int offset;
+
+		if (avail <= i) {
+			stream_pos += avail;
+			i -= avail;
+			continue;
+		}
+
+		fprintf(stderr, "Buffer %u at %p, len %u, pos %u-%u\n", k, bp, avail, stream_pos, stream_pos + avail);
+		data = bp->data + bp->head;
+		for (offset = 0; offset < avail; offset += test_pattern_len) {
+			unsigned int left = avail - offset;
+
+			if (left > test_pattern_len)
+				left = test_pattern_len;
+			fprintf(stderr, "%*.*s\n", left, left, data + offset);
+			offset += left;
+		}
+
+		break;
+	}
+}
+
+void
+test_client_recv_pattern(struct queue *q, unsigned long *pos, unsigned int count)
+{
+	unsigned long orig_pos = *pos;
+	unsigned char *buf = alloca(count);
+	const unsigned char *p;
+	unsigned long fail_pos;
+
+	test_trace("%s(pos %lu (offset %lu), count %u)\n", __func__, *pos, *pos % test_pattern_len, count);
+
+	p = queue_peek(q, buf, count);
+	if (!test_verify_pattern(pos, p, count, &fail_pos)) {
+		__show_corrupt_buffer(q, orig_pos, fail_pos - orig_pos);
+
+		fflush(stderr);
+		assert(0);
+	}
+	queue_advance_head(q, count);
 }
 
 const char *

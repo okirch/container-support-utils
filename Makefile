@@ -9,6 +9,9 @@ CONSOLE		= sidecar-console
 TESTAPPS	= test-queue \
 		  test-socket \
 		  test-shell
+TESTSRCS	= test-common.c \
+		  test-client.c
+TESTOBJS	= $(TESTSRCS:.c=.o)
 LIB		= libconsole.a
 LIBSRCS		= shell.c \
 		  mainloop.c \
@@ -39,14 +42,14 @@ install: $(PYAPP) $(PYMODULES) $(CONSOLE)
 $(LIB): $(LIBOBJS)
 	$(AR) crv $@ $(LIBOBJS)
 
-test-queue: test-queue.o test-common.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ test-queue.o test-common.o $(LINK)
+test-queue: test-queue.o $(TESTOBJS) $(LIB)
+	$(CC) $(CFLAGS) -o $@ test-queue.o $(TESTOBJS) $(LINK)
 
-test-socket: test-socket.o test-common.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ test-socket.o test-common.o $(LINK)
+test-socket: test-socket.o $(TESTOBJS) $(LIB)
+	$(CC) $(CFLAGS) -o $@ test-socket.o $(TESTOBJS) $(LINK)
 
-test-shell: test-shell.o test-common.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ test-shell.o test-common.o $(LINK)
+test-shell: test-shell.o $(TESTOBJS) $(LIB)
+	$(CC) $(CFLAGS) -o $@ test-shell.o $(TESTOBJS) $(LINK)
 
 sidecar-console: sidecar-console.o $(LIB)
 	$(CC) $(CFLAGS) -o $@ sidecar-console.o $(LINK)
