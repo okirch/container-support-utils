@@ -142,17 +142,16 @@ io_shell_process_packets(struct queue *q, struct shell_receiver *r)
 }
 
 static bool
-io_shell_build_data_packet(struct queue *q, struct shell_sender *s)
+io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *next)
 {
 	static unsigned int HDRLEN = sizeof(struct packet_header);
 	struct packet_header hdrbuf;
-	struct sender *next = s->next;
 	unsigned int bytes, room;
 
 	if (next && next->get_data)
-		next->get_data(&s->queue, next);
+		next->get_data(dataq, next);
 
-	bytes = queue_available(&s->queue);
+	bytes = queue_available(dataq);
 	if (bytes == 0)
 		return false;
 
@@ -172,7 +171,7 @@ io_shell_build_data_packet(struct queue *q, struct shell_sender *s)
 	queue_append(q, &hdrbuf, HDRLEN);
 
 	/* Transfer bytes from raw dataq to shell layer packet queue */
-	queue_transfer(q, &s->queue, bytes);
+	queue_transfer(q, dataq, bytes);
 
 	return true;
 }
@@ -210,10 +209,11 @@ static void
 io_shell_service_get_data(struct queue *q, struct sender *base_sender)
 {
 	struct shell_sender *s = (struct shell_sender *) base_sender;
+	struct queue *dataq = &s->queue;
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
-	while (io_shell_build_data_packet(q, s))
+	while (io_shell_build_data_packet(q, dataq, s->next))
 		;
 }
 
