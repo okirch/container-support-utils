@@ -13,7 +13,8 @@ TESTSRCS	= test-common.c \
 		  test-client.c
 TESTOBJS	= $(TESTSRCS:.c=.o)
 LIB		= libconsole.a
-LIBSRCS		= shell.c \
+LIBSRCS		= forwarder.c \
+		  shell.c \
 		  mainloop.c \
 		  endpoint.c \
 		  queue.c \
