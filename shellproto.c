@@ -220,20 +220,25 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 static void
 __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 {
-	struct console_slave *shell;
-	char *argv[] = {
-		"-sh",
-		NULL
+	static struct io_shell_session_settings default_shell_settings = {
+		.command	= "/bin/bash",
+		.argv		= { "-sh", NULL },
+		.procfd		= -1,
 	};
+	const struct io_shell_session_settings *settings = handle;
+	struct console_slave *shell;
 
-	shell = start_shell("/bin/bash", argv, -1, false);
+	if (settings == NULL)
+		settings = &default_shell_settings;
+
+	shell = start_shell(settings->command, settings->argv, settings->procfd, false);
 
 	io_shell_service_create(new_socket, shell);
 	new_socket->debug_name = "shell-service";
 }
 
 struct endpoint *
-io_shell_service_create_listener(struct sockaddr_in *listen_addr)
+io_shell_service_create_listener(const struct io_shell_session_settings *settings, struct sockaddr_in *listen_addr)
 {
 	struct endpoint *ep;
 	struct sockaddr_in sin;
@@ -264,7 +269,7 @@ io_shell_service_create_listener(struct sockaddr_in *listen_addr)
 		*listen_addr = sin;
 
 	ep = endpoint_new_listener(listen_fd);
-	endpoint_register_accept_callback(ep, __io_shell_service_accept, NULL);
+	endpoint_register_accept_callback(ep, __io_shell_service_accept, (void *) settings);
 	ep->debug_name = "shell-listener";
 
 	return ep;

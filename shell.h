@@ -46,7 +46,16 @@ extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, int tty
 extern void			io_shell_service_install(struct endpoint *ep);
 extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket, struct console_slave *process);
 
-extern struct endpoint *	io_shell_service_create_listener(struct sockaddr_in *listen_addr);
+#define IO_SHELL_MAX_ARGS	16
+struct io_shell_session_settings {
+	const char *		command;
+	char *			argv[IO_SHELL_MAX_ARGS];
+
+	int			procfd;
+};
+
+extern struct endpoint *	io_shell_service_create_listener(const struct io_shell_session_settings *,
+						struct sockaddr_in *listen_addr);
 
 
 #endif /* _SHELL_H */
