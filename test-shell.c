@@ -132,7 +132,7 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 			return false;
 
 		if (queue_tailroom(next->recvq) < hdrbuf.len) {
-			test_trace("not enough room in next layer, cannot queue incoming data packet\n");
+			test_trace("not enough room in next layer, leave incoming packet in packet queue\n");
 			if (test_progress)
 				write(2, "!", 1);
 			return true;
@@ -246,20 +246,41 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 {
 	struct io_forwarder *fwd = handle;
 
-	/* We received an EOF from the client.
-	 * We should now switch the pty master socket to sending a
-	 * continuous stream of ctrl-ds... if we had termios enabled,
-	 * which we don't, for now.
-	 * Instead, just kill the child process.
-	 */
-	test_trace("=== Killing shell command\n");
-	/* process_kill(fwd->process); */
+	test_trace("%s(%s)\n", __func__, endpoint_debug_name(ep));
+	if (ep == fwd->socket) {
+		/* We received an EOF from the client.
+		 * We should now switch the pty master socket to sending a
+		 * continuous stream of ctrl-ds... if we had termios enabled,
+		 * which we don't, for now.
+		 * Instead, just kill the child process.
+		 */
+		test_trace("=== Hanging up PTY master ===\n");
+		if (fwd->pty)
+			queue_destroy(&fwd->pty->sendq);
+		if (fwd->process)
+			process_hangup(fwd->process);
+	} else
+	if (ep == fwd->pty) {
+		/* We received a hangup from the pty slave.
+		 */
+		test_trace("=== Hanging up PTY master ===\n");
+		if (fwd->pty) {
+			queue_destroy(&fwd->pty->sendq);
+			endpoint_shutdown_write(fwd->pty);
+		}
+		if (fwd->process)
+			process_hangup(fwd->process);
 
-	queue_destroy(&fwd->pty->sendq);
-	process_hangup(fwd->process);
+		/* Pretend that the socket has received an
+		 * EOF from the peer. This is to make sure
+		 * we no longer queue any data to the pty
+		 * (which may soon cease to exist). */
+		if (fwd->socket)
+			endpoint_eof_from_peer(fwd->socket);
+	}
 
-	/* Write out any data we have queued, then close the socket's
-	 * sending half. */
+	/* We should now write out any pending data to the socket, then
+	 * close the socket's sending half */
 	if (fwd->socket)
 		endpoint_shutdown_write(fwd->socket);
 }
@@ -269,10 +290,14 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 {
 	struct io_forwarder *fwd = handle;
 
-	if (fwd->socket == ep)
+	test_trace("%s(%s)\n", __func__, endpoint_debug_name(ep));
+	if (fwd->socket == ep) {
+		test_trace("=== Hangup from client ===\n");
 		fwd->socket = NULL;
-	else if (fwd->pty == ep)
+	} else if (fwd->pty == ep) {
+		test_trace("=== Hangup on PTY ===\n");
 		fwd->pty = NULL;
+	}
 
 	if (fwd->pty)
 		fwd->pty->recvq = NULL;
@@ -293,6 +318,8 @@ io_forwarder_setup(struct endpoint *socket, struct console_slave *process)
 	fwd->process = process;
 
 	fwd->pty = endpoint_new_pty(process->master_fd);
+	endpoint_register_eof_callback(fwd->pty, io_forwarder_eof_callback, fwd);
+	endpoint_register_close_callback(fwd->pty, io_forwarder_close_callback, fwd);
 
 	endpoint_set_upper_layer(socket,
 			passthru_sender(&fwd->pty->recvq),
@@ -522,9 +549,43 @@ do_hangup_test(unsigned int time)
 	do_common_test_teardown(&appdata, console);
 }
 
+void
+do_die_test(unsigned int time)
+{
+	struct console_slave *console;
+	struct test_client_appdata appdata;
+	struct endpoint *ep;
+
+	printf("shell-hangup test, duration %u\n", time);
+
+	do_common_test_setup(&appdata, &console, &ep);
+
+	if (io_mainloop((time - 1) * 1000) < 0) {
+		fprintf(stderr, "io_mainloop returns error\n");
+		exit(99);
+	}
+
+	fprintf(stderr, "=== killing the shell process ===\n");
+	process_kill(console);
+
+	if (io_mainloop(1000) < 0) {
+		fprintf(stderr, "io_mainloop #2 returns error\n");
+		exit(99);
+	}
+
+	if (!appdata.closed) {
+		fprintf(stderr, "Client socket did not receive EOF from server\n");
+		exit(99);
+	}
+	printf("Client socket received EOF from server\n");
+
+	do_common_test_teardown(&appdata, console);
+}
+
 enum {
 	TEST_CAT,
 	TEST_HANGUP,
+	TEST_DIE,
 };
 
 int
@@ -535,6 +596,7 @@ main(int argc, char **argv)
 		.test_cases = {
 			{ "cat",	TEST_CAT	},
 			{ "hangup",	TEST_HANGUP	},
+			{ "die",	TEST_DIE	},
 			{ NULL }
 		},
 	};
@@ -546,6 +608,8 @@ main(int argc, char **argv)
 		do_cat_test(opt.timeout);
 	if (opt.tests & (1 << TEST_HANGUP))
 		do_hangup_test(2);
+	if (opt.tests & (1 << TEST_DIE))
+		do_die_test(2);
 	printf("All is well.\n");
 	return 0;
 }
