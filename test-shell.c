@@ -385,6 +385,21 @@ create_cat_service(int sockfd)
 
 }
 
+static struct endpoint *
+create_shell_client(int fd, struct test_client_appdata *appdata)
+{
+	struct endpoint *ep;
+
+	ep = test_client_create(fd, "echo-client", appdata);
+
+	/* Install the shell protocol layer */
+	endpoint_set_upper_layer(ep, 
+		shell_service_sender(ep->sender),
+		shell_service_receiver(ep->receiver));
+
+	return ep;
+}
+
 static void
 shell_terminate_and_exit(struct console_slave *console)
 {
@@ -423,7 +438,6 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 {
 	struct console_slave *console;
 	struct test_client_appdata appdata;
-	struct endpoint *ep;
 	int pair[2];
 
 	printf("echo test%s%s, duration %u\n",
@@ -444,12 +458,7 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 	console = create_cat_service(pair[0]);
 
 	/* The second socket is the client socket. */
-	ep = test_client_create(pair[1], "echo-client", &appdata);
-
-	/* Install the shell protocol layer */
-	endpoint_set_upper_layer(ep, 
-		shell_service_sender(ep->sender),
-		shell_service_receiver(ep->receiver));
+	create_shell_client(pair[1], &appdata);
 
 	io_mainloop(time * 1000);
 
@@ -488,7 +497,7 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 	console = create_cat_service(pair[0]);
 
 	/* The second socket is the client socket. */
-	ep = test_client_create(pair[1], "echo-client", &appdata);
+	ep = create_shell_client(pair[1], &appdata);
 
 	if (io_mainloop((time - 1) * 1000) < 0) {
 		fprintf(stderr, "io_mainloop returns error\n");
