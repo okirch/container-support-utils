@@ -68,7 +68,7 @@ install_sigchild_handler(void)
 }
 
 struct console_slave *
-start_shell(const char *cmd, char * const * argv, int procfd)
+start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 {
 	struct console_slave *ret;
 	char slave_name[PATH_MAX];
@@ -83,11 +83,13 @@ start_shell(const char *cmd, char * const * argv, int procfd)
 
 	if (pid == 0) {
 #ifndef TIOCTTY
-		struct termios tc;
+		if (raw_mode) {
+			struct termios tc;
 
-		tcgetattr(0, &tc);
-		cfmakeraw(&tc);
-		tcsetattr(0, TCSANOW, &tc);
+			tcgetattr(0, &tc);
+			cfmakeraw(&tc);
+			tcsetattr(0, TCSANOW, &tc);
+		}
 #endif
 
 		/* TBD: set name spaces from procfd */
@@ -100,7 +102,8 @@ start_shell(const char *cmd, char * const * argv, int procfd)
 	}
 
 #ifdef TIOCTTY
-	ioctl(mfd, TIOCTTY, 1);
+	if (raw_mode)
+		ioctl(mfd, TIOCTTY, 1);
 #endif
 
 	ret = calloc(1, sizeof(*ret));
