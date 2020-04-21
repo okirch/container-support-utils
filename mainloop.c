@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <assert.h>
+#include <errno.h>
 #include <sys/poll.h>
 #include <sys/time.h>
 #include "endpoint.h"
@@ -163,7 +163,7 @@ io_mainloop(long timeout)
 			wait_ms = until - now;
 		}
 
-		if (poll(pfd, nfds, wait_ms) < 0) {
+		if (poll(pfd, nfds, wait_ms) < 0 && errno != EINTR) {
 			perror("poll");
 			return -1;
 		}
