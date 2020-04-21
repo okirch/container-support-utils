@@ -208,6 +208,8 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 	/* struct endpoint *pty; */
 
 	fwd = io_forwarder_setup(socket, process);
+	fwd->pty->debug_name = "pty";
+	fwd->pty->debug = socket->debug;
 
 	/* Install the shell protocol layer */
 	io_shell_service_install(socket);

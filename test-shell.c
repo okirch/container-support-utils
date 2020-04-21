@@ -235,21 +235,29 @@ struct echo_client_appdata {
 	bool		yesman;
 	bool		socket_closed;
 
+	const char *	command;
+	const char *	expected;
+
+	bool		shutdown_write;
+	struct endpoint *hack_endpoint;
+
 	unsigned int *	pending_count;
 };
+
+#define ECHO_CLIENT_COMMAND	"V=Yes; echo \"$V$V$V\"; exit 0;\n"
+#define ECHO_CLIENT_EXPECT	"YesYesYes"
+#define ECHO_CLIENT_COMMAND2	"V=Yes; echo \"$V$V$V\"\n"
 
 static void
 echo_client_get_data(struct queue *q, struct sender *s)
 {
-	static char command[] = {
-		"V=Yes; echo \"$V$V$V\"; exit 0;\n"
-	};
 	struct echo_client_appdata *appdata = s->handle;
 
 	if (appdata->sent)
 		return;
 
-	queue_append(q, command, strlen(command));
+	queue_append(q, appdata->command, strlen(appdata->command));
+
 	appdata->sent = true;
 }
 
@@ -281,8 +289,14 @@ echo_client_push_data(struct queue *q, struct receiver *r)
 	p = queue_peek(q, buffer, bytes);
 
 	test_trace("received \"%.*s\"\n", bytes, (const char *) p);
-	if (memmem(p, bytes, "YesYesYes", 9) != NULL)
+	if (memmem(p, bytes, appdata->expected, strlen(appdata->expected)) != NULL) {
 		appdata->yesman = true;
+
+		if (appdata->shutdown_write && appdata->hack_endpoint) {
+			endpoint_shutdown_write(appdata->hack_endpoint);
+			appdata->hack_endpoint = NULL;
+		}
+	}
 
 	return false;
 }
@@ -375,6 +389,9 @@ do_listen_test(unsigned int time)
 
 		snprintf(namebuf, sizeof(namebuf), "echo-client%d", i);
 		ep = create_echo_client(&appdata[i], namebuf, &svc_addr);
+
+		appdata[i].command = ECHO_CLIENT_COMMAND;
+		appdata[i].expected = ECHO_CLIENT_EXPECT;
 		appdata[i].pending_count = &pending_count;
 
 		io_register_endpoint(ep);
@@ -407,12 +424,60 @@ do_listen_test(unsigned int time)
 	io_close_all();
 }
 
+void
+do_ctrl_d_test(unsigned int time)
+{
+	struct echo_client_appdata appdata;
+	struct sockaddr_in svc_addr;
+	struct endpoint *ep;
+	unsigned int pending_count = 0;
+	bool failed = false;
+
+	printf("ctrl-d test\n");
+
+	do_listener_test_setup(&svc_addr);
+
+	ep = create_echo_client(&appdata, "echo-client", &svc_addr);
+
+	appdata.command = ECHO_CLIENT_COMMAND2;
+	appdata.expected = ECHO_CLIENT_EXPECT;
+	appdata.shutdown_write = true;
+	appdata.hack_endpoint = ep;
+	appdata.pending_count = &pending_count;
+	pending_count += 1;
+
+	io_register_endpoint(ep);
+
+	if (io_mainloop(time * 1000) < 0) {
+		fprintf(stderr, "io_mainloop returns error\n");
+		exit(99);
+	}
+
+	if (!appdata.sent || !appdata.yesman || !appdata.socket_closed) {
+		fprintf(stderr, "Client sent=%s received=%s closed=%s\n",
+				appdata.sent? "okay" : "NO",
+				appdata.yesman? "okay" : "NO",
+				appdata.socket_closed? "okay" : "NO");
+		failed = true;
+	}
+
+	if (failed) {
+		fprintf(stderr, "FAILED\n");
+		exit(99);
+	}
+
+	printf("echo client test succeeded\n");
+
+	io_close_all();
+}
+
 
 enum {
 	TEST_CAT,
 	TEST_HANGUP,
 	TEST_DIE,
 	TEST_LISTEN,
+	TEST_CTRLD,
 };
 
 int
@@ -425,6 +490,7 @@ main(int argc, char **argv)
 			{ "hangup",	TEST_HANGUP	},
 			{ "die",	TEST_DIE	},
 			{ "listen",	TEST_LISTEN	},
+			{ "ctrld",	TEST_CTRLD	},
 			{ NULL }
 		},
 	};
@@ -440,6 +506,8 @@ main(int argc, char **argv)
 		do_die_test(2);
 	if (opt.tests & (1 << TEST_LISTEN))
 		do_listen_test(opt.timeout);
+	if (opt.tests & (1 << TEST_CTRLD))
+		do_ctrl_d_test(opt.timeout);
 	printf("All is well.\n");
 	return 0;
 }
