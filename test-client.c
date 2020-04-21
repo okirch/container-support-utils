@@ -51,6 +51,7 @@ test_client_push_data(struct queue *q, struct receiver *r)
 	size_t recv_sz;
 
 	assert(q);
+	assert(q == r->recvq);
 
 	recv_sz = queue_available(q);
 	test_trace("%s: %lu bytes of data available\n", __func__, recv_sz);

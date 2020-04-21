@@ -25,7 +25,6 @@ struct io_forwarder {
 
 struct shell_receiver {
 	struct receiver		base;
-	struct queue		queue;
 	struct receiver *	next;
 };
 
@@ -78,9 +77,8 @@ passthru_sender(struct queue **qp)
  * Process one or more incoming packets
  */
 static void
-__io_shell_process_packet(const struct packet_header *hdr, struct queue *q, struct shell_receiver *r)
+__io_shell_process_packet(const struct packet_header *hdr, struct queue *q, struct receiver *next)
 {
-	struct receiver *next = r->next;
 	void *buffer;
 	const void *p;
 
@@ -100,7 +98,7 @@ __io_shell_process_packet(const struct packet_header *hdr, struct queue *q, stru
 }
 
 void
-io_shell_process_packets(struct queue *q, struct shell_receiver *r)
+io_shell_process_packets(struct queue *q, struct receiver *next)
 {
 	static unsigned int HDRLEN = sizeof(struct packet_header);
 	struct packet_header hdrbuf;
@@ -127,7 +125,7 @@ io_shell_process_packets(struct queue *q, struct shell_receiver *r)
 		if (queue_available(q) < HDRLEN + hdrbuf.len)
 			return;
 
-		if (queue_tailroom(r->next->recvq) < hdrbuf.len) {
+		if (queue_tailroom(next->recvq) < hdrbuf.len) {
 			test_trace("not enough room in next layer, cannot queue incoming data packet\n");
 			if (test_progress)
 				write(2, "!", 1);
@@ -137,7 +135,7 @@ io_shell_process_packets(struct queue *q, struct shell_receiver *r)
 		/* Skip past header */
 		queue_advance_head(q, HDRLEN);
 
-		__io_shell_process_packet(&hdrbuf, q, r);
+		__io_shell_process_packet(&hdrbuf, q, next);
 	}
 }
 
@@ -187,8 +185,7 @@ io_shell_service_push_data(struct queue *q, struct receiver *r)
 
 	assert(q == r->recvq);
 
-	io_shell_process_packets(q, (struct shell_receiver *) r);
-	return;
+	io_shell_process_packets(q, ((struct shell_receiver *) r)->next);
 }
 
 static struct receiver *
@@ -198,7 +195,7 @@ shell_service_receiver(struct receiver *next)
 
 	r = calloc(1, sizeof(*r));
 	r->base.push_data = io_shell_service_push_data;
-	r->base.recvq = &r->queue;
+	r->base.recvq = &r->base.__queue;
 
 	r->next = next;
 

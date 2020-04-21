@@ -79,7 +79,6 @@ struct sender {
 struct receiver {
 	void *		handle;
 	void		(*push_data)(struct queue *, struct receiver *);
-//	void		(*close_callback)(struct endpoint *, struct receiver *);
 
 	struct queue *	recvq;
 	struct queue	__queue;
