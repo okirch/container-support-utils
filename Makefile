@@ -27,6 +27,10 @@ PYLIBDIR	= /usr/lib/$(PYVERS)/site-packages/suse_sidecar
 all: $(PYAPP) $(PYMODULES) $(TESTAPPS) $(CONSOLE)
 
 tests:	$(TESTAPPS)
+	@set -e; for t in $(TESTAPPS); do \
+		echo "== $$t =="; \
+		./$$t -s $$RANDOM; \
+	done
 
 clean:
 	rm -f $(CONSOLE) $(TESTAPPS)
