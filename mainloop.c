@@ -20,6 +20,10 @@ static unsigned int	io_endpoint_count;
 
 static struct io_callback *io_callbacks;
 
+
+static const char *	io_strpollevents(int);
+static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
+
 void
 io_register_endpoint(struct endpoint *ep)
 {
@@ -153,12 +157,8 @@ io_mainloop(long timeout)
 				endpoint_data_source_callback(ep);
 
 			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
-				if (ep->debug) {
-					int events = pfd[nfds].events;
-					endpoint_debug(ep, "poll %s%s",
-							(events & POLLIN)? " POLLIN" : "",
-							(events & POLLOUT)? " POLLOUT" : "");
-				}
+				if (ep->debug)
+					endpoint_debug(ep, "poll%s", io_strpollevents(pfd[nfds].events));
 				watching[nfds++] = ep;
 			}
 		}
@@ -181,6 +181,9 @@ io_mainloop(long timeout)
 			perror("poll");
 			return -1;
 		}
+
+		/* For testing purposes only */
+		io_stall_detect(now, pfd, nfds);
 
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
@@ -230,4 +233,67 @@ io_mainloop(long timeout)
 	}
 
 	return 0;
+}
+
+static const char *
+io_strpollevents(int ev)
+{
+	static char buffer[62];
+
+	if (ev == 0)
+		return " <NIL>";
+
+	snprintf(buffer, sizeof(buffer), "%s%s%s%s",
+				(ev & POLLIN)? " POLLIN" : "",
+				(ev & POLLOUT)? " POLLOUT" : "",
+				(ev & POLLHUP)? " POLLHUP" : "",
+				(ev & POLLERR)? " POLLERR" : "");
+	return buffer;
+}
+
+static const char *
+io_strqueueinfo(const struct queue *q)
+{
+	static char buffer[62];
+
+	if (q == NULL)
+		return "<NIL>";
+
+	snprintf(buffer, sizeof(buffer), "avail %lu; tailroom %lu",
+			queue_available(q),
+			queue_tailroom(q));
+	return buffer;
+}
+
+static void
+io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds)
+{
+	unsigned long delay;
+	unsigned int i, poll_i;
+
+	delay = io_timestamp_ms() - ts;
+	if (delay < 500)
+		return;
+
+	fprintf(stderr, "====\n");
+	fprintf(stderr, "IO stall for %lu ms\n", delay);
+
+	for (i = poll_i = 0; i < io_endpoint_count; ++i) {
+		struct endpoint *ep = io_endpoints[i];
+		unsigned int events = 0;
+
+		if (pfd[poll_i].fd == ep->fd)
+			events = pfd[poll_i++].events;
+
+		fprintf(stderr, "%-20s poll%s%s%s%s%s\n",
+				endpoint_debug_name(ep),
+				ep->write_shutdown_requested? " write_shutdown_requested" : "",
+				ep->write_shutdown_sent? " write_shutdown_sent" : "",
+				ep->read_shutdown_received? " read_shutdown_received" : "",
+				ep->have_unconsumed_data? " have_unconsumed_data" : "",
+				io_strpollevents(events));
+		fprintf(stderr, "    sendq %s\n", io_strqueueinfo(&ep->sendq));
+		fprintf(stderr, "    recvq %s\n", io_strqueueinfo(ep->recvq));
+	}
+	fprintf(stderr, "====\n");
 }
