@@ -433,19 +433,14 @@ shell_terminate_and_exit(struct console_slave *console)
 
 }
 
-void
-do_cat_test(unsigned int time, bool random_send, bool random_recv)
+static void
+do_common_test_setup(struct test_client_appdata *appdata, struct console_slave **consolep, struct endpoint **clientp)
 {
 	struct console_slave *console;
-	struct test_client_appdata appdata;
+	struct endpoint *client;
 	int pair[2];
 
-	printf("echo test%s%s, duration %u\n",
-			random_send? " random-sends" : "",
-			random_recv? " random-recvs" : "",
-			time);
-
-	test_client_appdata_init(&appdata, random_send, random_recv);
+	test_client_appdata_init(appdata, false, false);
 
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
 		perror("socketpair");
@@ -458,17 +453,40 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 	console = create_cat_service(pair[0]);
 
 	/* The second socket is the client socket. */
-	create_shell_client(pair[1], &appdata);
+	client = create_shell_client(pair[1], appdata);
+
+	if (consolep)
+		*consolep = console;
+
+	if (clientp)
+		*clientp = client;
+}
+
+static void
+do_common_test_teardown(struct test_client_appdata *appdata, struct console_slave *console)
+{
+	assert(appdata->recv_pos <= appdata->send_pos);
+	/* assert(appdata->send_pos - appdata->recv_pos <= QUEUE_SZ); */
+
+	shell_terminate_and_exit(console);
+	test_client_print_stats(appdata);
+
+	io_close_all();
+}
+
+void
+do_cat_test(unsigned int time, bool random_send, bool random_recv)
+{
+	struct console_slave *console;
+	struct test_client_appdata appdata;
+
+	printf("echo test, duration %u\n", time);
+
+	do_common_test_setup(&appdata, &console, NULL);
 
 	io_mainloop(time * 1000);
 
-	assert(appdata.recv_pos <= appdata.send_pos);
-	/* assert(appdata.send_pos - appdata.recv_pos <= QUEUE_SZ); */
-
-	shell_terminate_and_exit(console);
-	test_client_print_stats(&appdata);
-
-	io_close_all();
+	do_common_test_teardown(&appdata, console);
 }
 
 void
@@ -477,27 +495,10 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 	struct console_slave *console;
 	struct test_client_appdata appdata;
 	struct endpoint *ep;
-	int pair[2];
 
-	printf("hangup test%s%s, duration %u\n",
-			random_send? " random-sends" : "",
-			random_recv? " random-recvs" : "",
-			time);
+	printf("hangup test, duration %u\n", time);
 
-	test_client_appdata_init(&appdata, random_send, random_recv);
-
-	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
-		perror("socketpair");
-		exit(66);
-	}
-
-	/* The first of the two sockets is the server endpoint.
-	 * It sends all incoming data to the shell/subcommand, and
-	 * forwards all shell output to the client. */
-	console = create_cat_service(pair[0]);
-
-	/* The second socket is the client socket. */
-	ep = create_shell_client(pair[1], &appdata);
+	do_common_test_setup(&appdata, &console, &ep);
 
 	if (io_mainloop((time - 1) * 1000) < 0) {
 		fprintf(stderr, "io_mainloop returns error\n");
@@ -512,19 +513,13 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 		exit(99);
 	}
 
-	assert(appdata.recv_pos <= appdata.send_pos);
-	/* assert(appdata.send_pos - appdata.recv_pos <= QUEUE_SZ); */
-
 	if (!appdata.closed) {
 		fprintf(stderr, "Client socket did not receive EOF from server\n");
 		exit(99);
 	}
 	printf("Client socket received EOF from server\n");
 
-	shell_terminate_and_exit(console);
-	test_client_print_stats(&appdata);
-
-	io_close_all();
+	do_common_test_teardown(&appdata, console);
 }
 
 enum {
