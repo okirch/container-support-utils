@@ -356,6 +356,24 @@ create_echo_client(struct echo_client_appdata *appdata, const char *name, const 
 	return ep;
 }
 
+static bool
+echo_client_check_result(int client_id, const struct echo_client_appdata *appdata)
+{
+	if (!appdata->sent || !appdata->yesman || !appdata->socket_closed) {
+		if (client_id >= 0)
+			fprintf(stderr, "Client %u", client_id);
+		else
+			fprintf(stderr, "Client");
+		fprintf(stderr, " sent=%s received=%s closed=%s\n",
+				appdata->sent? "okay" : "NO",
+				appdata->yesman? "okay" : "NO",
+				appdata->socket_closed? "okay" : "NO");
+		return false;
+	}
+
+	return true;
+}
+
 static struct endpoint *
 do_listener_test_setup(struct sockaddr_in *listen_addr)
 {
@@ -403,15 +421,8 @@ do_listen_test(unsigned int time)
 	}
 
 	for (i = 0; i < NCLIENTS; ++i) {
-		struct echo_client_appdata *app = &appdata[i];
-
-		if (!app->sent || !app->yesman || !app->socket_closed) {
-			fprintf(stderr, "Client %u sent=%s received=%s closed=%s\n", i,
-					app->sent? "okay" : "NO",
-					app->yesman? "okay" : "NO",
-					app->socket_closed? "okay" : "NO");
+		if (!echo_client_check_result(i, &appdata[i]))
 			failed = true;
-		}
 	}
 
 	if (failed) {
@@ -431,7 +442,6 @@ do_ctrl_d_test(unsigned int time)
 	struct sockaddr_in svc_addr;
 	struct endpoint *ep;
 	unsigned int pending_count = 0;
-	bool failed = false;
 
 	printf("ctrl-d test\n");
 
@@ -453,15 +463,7 @@ do_ctrl_d_test(unsigned int time)
 		exit(99);
 	}
 
-	if (!appdata.sent || !appdata.yesman || !appdata.socket_closed) {
-		fprintf(stderr, "Client sent=%s received=%s closed=%s\n",
-				appdata.sent? "okay" : "NO",
-				appdata.yesman? "okay" : "NO",
-				appdata.socket_closed? "okay" : "NO");
-		failed = true;
-	}
-
-	if (failed) {
+	if (!echo_client_check_result(-1, &appdata)) {
 		fprintf(stderr, "FAILED\n");
 		exit(99);
 	}
