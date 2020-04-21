@@ -195,6 +195,19 @@ io_mainloop(long timeout)
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
 
+			if (ep->debug)
+				endpoint_debug(ep, "poll.revents %s", io_strpollevents(pfd[i].revents));
+
+			if (pfd[i].revents == POLLHUP) {
+				endpoint_debug(ep, "hangup from client");
+				endpoint_eof_from_peer(ep);
+				pfd[i].revents = 0;
+			}
+		}
+
+		for (i = 0; i < nfds; ++i) {
+			struct endpoint *ep = watching[i];
+
 			if (pfd[i].revents & POLLOUT) {
 				endpoint_debug(ep, "socket can send");
 				count = endpoint_transmit(ep);
@@ -209,14 +222,8 @@ io_mainloop(long timeout)
 			}
 		}
 
-		now = io_timestamp_ms();
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
-
-			if (pfd[i].revents & POLLHUP) {
-				endpoint_debug(ep, "hangup from client");
-				endpoint_eof_from_peer(ep);
-			}
 
 			if (pfd[i].revents & POLLIN) {
 				endpoint_debug(ep, "socket has data");
