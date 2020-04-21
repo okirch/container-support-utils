@@ -26,9 +26,6 @@ struct endpoint {
 	struct queue	sendq;
 	struct queue *	recvq;
 
-	unsigned long	recv_ts, last_recv_ts;
-	unsigned long	send_ts, last_send_ts;
-
 	/* A size hint for how much we can (try to) send in one go.
 	 */
 	unsigned int	send_size_hint;
@@ -127,6 +124,7 @@ extern void		endpoint_set_upper_layer(struct endpoint *ep,
 extern void		io_register_endpoint(struct endpoint *ep);
 extern int		io_mainloop(long timeout);
 extern void		io_close_all(void);
+extern unsigned long	io_timestamp_ms(void);
 
 extern void		io_register_callback(struct io_callback *);
 

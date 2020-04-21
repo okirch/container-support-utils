@@ -48,6 +48,11 @@ struct test_client_appdata {
 
 	bool		closed;
 
+	struct test_client_timing {
+		unsigned long	last_ts;
+		unsigned long	max_delay;
+	} send_timing, recv_timing;
+
 	struct queue	recvq;
 };
 

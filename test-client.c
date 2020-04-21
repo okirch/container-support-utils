@@ -14,6 +14,21 @@
 #include "testing.h"
 
 static void
+test_client_timing_update(struct test_client_timing *t)
+{
+	unsigned long ts = io_timestamp_ms();
+	unsigned long delay;
+
+	if (t->last_ts != 0 && ts > t->last_ts) {
+		delay = ts - t->last_ts;
+		if (delay > t->max_delay)
+			t->max_delay = delay;
+	}
+
+	t->last_ts = ts;
+}
+
+static void
 test_client_get_data(struct queue *q, struct sender *s)
 {
 	struct test_client_appdata *appdata = s->handle;
@@ -30,6 +45,8 @@ test_client_get_data(struct queue *q, struct sender *s)
 		if (test_progress)
 			write(1, ".", 1);
 	}
+
+	test_client_timing_update(&appdata->send_timing);
 }
 
 struct sender *
@@ -63,6 +80,8 @@ test_client_push_data(struct queue *q, struct receiver *r)
 
 	if (test_progress)
 		write(1, "+", 1);
+
+	test_client_timing_update(&appdata->recv_timing);
 }
 
 static void
@@ -93,6 +112,15 @@ test_client_receiver(void *handle)
 void
 test_client_print_stats(const struct test_client_appdata *appdata)
 {
+	if (appdata->recv_timing.max_delay > 500) {
+		fprintf(stderr, "FAIL: receive stalled for %lu ms\n", appdata->recv_timing.max_delay);
+		exit(99);
+	}
+	if (appdata->send_timing.max_delay > 500) {
+		fprintf(stderr, "FAIL: send stalled for %lu ms\n", appdata->send_timing.max_delay);
+		exit(99);
+	}
+
 	printf("OK: sent %s bytes in %u chunks; received %s bytes in %u chunks. %lu bytes still in flight.\n",
 			print_byte_count(appdata->send_pos), appdata->nsends,
 			print_byte_count(appdata->recv_pos), appdata->nrecvs,
