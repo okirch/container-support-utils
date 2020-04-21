@@ -25,12 +25,10 @@ struct io_forwarder {
 
 struct shell_receiver {
 	struct receiver		base;
-	struct receiver *	next;
 };
 
 struct shell_sender {
 	struct sender		base;
-	struct sender *		next;
 };
 
 struct packet_header {
@@ -194,7 +192,7 @@ io_shell_service_push_data(struct queue *q, struct receiver *r)
 
 	if (test_progress)
 		write(2, "r", 1);
-	return io_shell_process_packets(q, ((struct shell_receiver *) r)->next);
+	return io_shell_process_packets(q, r->next);
 }
 
 static struct receiver *
@@ -205,8 +203,7 @@ shell_service_receiver(struct receiver *next)
 	r = calloc(1, sizeof(*r));
 	r->base.push_data = io_shell_service_push_data;
 	r->base.recvq = &r->base.__queue;
-
-	r->next = next;
+	r->base.next = next;
 
 	return &r->base;
 }
@@ -219,7 +216,7 @@ io_shell_service_get_data(struct queue *q, struct sender *base_sender)
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
-	while (io_shell_build_data_packet(q, dataq, s->next)) {
+	while (io_shell_build_data_packet(q, dataq, s->base.next)) {
 		if (test_progress)
 			write(2, "s", 1);
 	}
@@ -233,7 +230,7 @@ shell_service_sender(struct sender *next)
 	s = calloc(1, sizeof(*s));
 	s->base.get_data = io_shell_service_get_data;
 
-	s->next = next;
+	s->base.next = next;
 	if (next && next->sendqp)
 		*(next->sendqp) = &s->base.__queue;
 

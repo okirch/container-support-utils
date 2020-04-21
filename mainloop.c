@@ -231,7 +231,8 @@ io_mainloop(long timeout)
 				count = endpoint_receive(ep);
 				if (count < 0) {
 					endpoint_error(ep, "socket receive error");
-					return -1;
+					ep->nuke_me = true;
+					continue;
 				}
 				if (count == 0) {
 					endpoint_debug(ep, "socket received end of file from peer");

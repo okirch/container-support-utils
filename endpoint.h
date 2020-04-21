@@ -69,6 +69,8 @@ struct application_ops {
 };
 
 struct sender {
+	struct sender *	next;
+
 	void *		handle;
 	void		(*get_data)(struct queue *, struct sender *);
 
@@ -77,6 +79,8 @@ struct sender {
 };
 
 struct receiver {
+	struct receiver *next;
+
 	void *		handle;
 	bool		(*push_data)(struct queue *, struct receiver *);
 
