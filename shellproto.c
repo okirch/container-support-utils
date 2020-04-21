@@ -247,7 +247,17 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 
 	listen_fd = socket(PF_INET, SOCK_STREAM, 0);
 
-	memset(&sin, 0, sizeof(sin));
+	if (listen_addr && listen_addr->sin_family == AF_INET) {
+		int one = 1;
+
+		sin = *listen_addr;
+
+		if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
+			perror("setsockopt(SO_REUSEADDR)");
+	} else {
+		memset(&sin, 0, sizeof(sin));
+	}
+
 	if (bind(listen_fd, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
 		perror("bind");
 		return NULL;
