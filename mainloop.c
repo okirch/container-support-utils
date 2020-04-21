@@ -250,11 +250,16 @@ io_strpollevents(int ev)
 	if (ev == 0)
 		return " <NIL>";
 
-	snprintf(buffer, sizeof(buffer), "%s%s%s%s",
+	if (ev == POLLHUP)
+		return "POLLHUP";
+	if (ev == POLLERR)
+		return "POLLERR";
+	if (ev == POLLNVAL)
+		return "POLLNVAL";
+
+	snprintf(buffer, sizeof(buffer), "%s%s",
 				(ev & POLLIN)? " POLLIN" : "",
-				(ev & POLLOUT)? " POLLOUT" : "",
-				(ev & POLLHUP)? " POLLHUP" : "",
-				(ev & POLLERR)? " POLLERR" : "");
+				(ev & POLLOUT)? " POLLOUT" : "");
 	return buffer;
 }
 
