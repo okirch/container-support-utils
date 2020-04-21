@@ -50,10 +50,7 @@ test_client_push_data(struct queue *q, struct receiver *r)
 	struct test_client_appdata *appdata = r->handle;
 	size_t recv_sz;
 
-	if (q == NULL) {
-		/* EOF from client */
-		return;
-	}
+	assert(q);
 
 	recv_sz = queue_available(q);
 	test_trace("%s: %lu bytes of data available\n", __func__, recv_sz);
@@ -68,9 +65,9 @@ test_client_push_data(struct queue *q, struct receiver *r)
 }
 
 static void
-test_client_close_callback(struct endpoint *ep, struct receiver *r)
+test_client_close_callback(struct endpoint *ep, void *handle)
 {
-	struct test_client_appdata *appdata = r->handle;
+	struct test_client_appdata *appdata = handle;
 
 	if (test_progress)
 		write(1, "\n", 1);
@@ -82,14 +79,14 @@ test_client_close_callback(struct endpoint *ep, struct receiver *r)
 struct receiver *
 test_client_receiver(void *handle)
 {
-	struct receiver *s;
+	struct receiver *r;
 
-	s = calloc(1, sizeof(*s));
-	s->handle = handle;
-	s->push_data = test_client_push_data;
-	s->close_callback = test_client_close_callback;
+	r = calloc(1, sizeof(*r));
+	r->handle = handle;
+	r->push_data = test_client_push_data;
+	r->recvq = &r->__queue;
 
-	return s;
+	return r;
 }
 
 void
@@ -117,10 +114,12 @@ test_client_create(int fd, const char *name, struct test_client_appdata *appdata
 
 	ep = endpoint_new_socket(fd);
 	ep->debug_name = name;
-	ep->recvq = &appdata->recvq;
 
-	ep->sender = test_client_sender(appdata);
-	ep->receiver = test_client_receiver(appdata);
+	endpoint_set_upper_layer(ep,
+			test_client_sender(appdata),
+			test_client_receiver(appdata));
+
+	endpoint_register_close_callback(ep, test_client_close_callback, appdata);
 
 	ep->debug = test_tracing;
 

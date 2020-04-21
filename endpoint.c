@@ -415,3 +415,60 @@ endpoint_eof_from_peer(struct endpoint *ep)
 
 	ep->recvq = NULL;
 }
+
+void
+endpoint_set_upper_layer(struct endpoint *ep, struct sender *s, struct receiver *r)
+{
+	ep->sender = s;
+        ep->receiver = r;
+	ep->recvq = r->recvq;
+}
+
+void
+endpoint_set_application(struct endpoint *ep, const struct application *app, void *handle)
+{
+	ep->sender = app->create_sender(handle);
+        ep->receiver = app->create_receiver(handle);
+	ep->recvq = ep->receiver->recvq;
+}
+
+/*
+ * Callbacks
+ */
+static void
+__endpoint_register_callback(struct io_callback **list, endpoint_callback_fn_t *fn, void *handle)
+{
+	struct io_callback *cb;
+
+	cb = calloc(1, sizeof(*cb));
+	cb->callback_fn = fn;
+	cb->app_handle = handle;
+
+	cb->next = *list;
+	*list = cb;
+}
+
+void
+endpoint_register_eof_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
+{
+	__endpoint_register_callback(&ep->eof_callbacks, fn, handle);
+}
+
+void
+endpoint_register_close_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
+{
+	__endpoint_register_callback(&ep->close_callbacks, fn, handle);
+}
+
+void
+__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list)
+{
+	struct io_callback *cb;
+
+	while ((cb = *list) != NULL) {
+		*list = cb->next;
+
+		cb->callback_fn(ep, cb->app_handle);
+		free(cb);
+	}
+}

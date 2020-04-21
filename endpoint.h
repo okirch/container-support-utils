@@ -26,6 +26,9 @@ struct endpoint {
 	struct queue	sendq;
 	struct queue *	recvq;
 
+	unsigned long	recv_ts, last_recv_ts;
+	unsigned long	send_ts, last_send_ts;
+
 	/* A size hint for how much we can (try to) send in one go.
 	 */
 	unsigned int	send_size_hint;
@@ -46,6 +49,9 @@ struct endpoint {
 	struct receiver *receiver;
 
 	const struct endpoint_ops *ops;
+
+	struct io_callback *eof_callbacks;
+	struct io_callback *close_callbacks;
 };
 
 /* These should really be called transport_ops */
@@ -67,16 +73,33 @@ struct sender {
 	void *		handle;
 	void		(*get_data)(struct queue *, struct sender *);
 
-	struct queue	queue;
+	struct queue **	sendqp;
 };
 
 struct receiver {
 	void *		handle;
 	void		(*push_data)(struct queue *, struct receiver *);
-	void		(*close_callback)(struct endpoint *, struct receiver *);
+//	void		(*close_callback)(struct endpoint *, struct receiver *);
 
-	struct queue	queue;
+	struct queue *	recvq;
+	struct queue	__queue;
 };
+
+struct application {
+	struct sender *	(*create_sender)(void *);
+	struct receiver *(*create_receiver)(void *);
+};
+
+typedef void		endpoint_callback_fn_t(struct endpoint *ep, void *app_handle);
+struct io_callback {
+	endpoint_callback_fn_t *callback_fn;
+	void *		app_handle;
+
+	struct io_callback **prev;
+	struct io_callback *next;
+	bool		posted;
+};
+
 
 extern struct endpoint *endpoint_new_socket(int fd);
 extern struct endpoint *endpoint_new_pty(int fd);
@@ -92,18 +115,19 @@ extern int		endpoint_transmit(struct endpoint *ep);
 extern int		endpoint_receive(struct endpoint *ep);
 extern void		endpoint_eof_from_peer(struct endpoint *ep);
 
+extern void		endpoint_register_eof_callback(struct endpoint *ep,
+				endpoint_callback_fn_t *, void *);
+extern void		endpoint_register_close_callback(struct endpoint *ep,
+				endpoint_callback_fn_t *, void *);
+extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **);
+
+extern void		endpoint_set_application(struct endpoint *ep, const struct application *, void *);
+extern void		endpoint_set_upper_layer(struct endpoint *ep,
+				struct sender *, struct receiver *);
+
 extern void		io_register_endpoint(struct endpoint *ep);
 extern int		io_mainloop(long timeout);
 extern void		io_close_all(void);
-
-struct io_callback {
-	void		(*callback_fn)(void *app_handle);
-	void *		app_handle;
-
-	struct io_callback **prev;
-	struct io_callback *next;
-	bool		posted;
-};
 
 extern void		io_register_callback(struct io_callback *);
 
@@ -148,28 +172,24 @@ endpoint_data_sink_callback(struct endpoint *ep)
 {
 	struct receiver *receiver = ep->receiver;
 
-	if (receiver && receiver->push_data)
+	if (receiver && receiver->push_data && ep->recvq)
 		receiver->push_data(ep->recvq, receiver);
 }
 
 static inline bool
 endpoint_eof_callback(struct endpoint *ep)
 {
-	struct receiver *receiver = ep->receiver;
-
-	if (!receiver || !receiver->push_data)
+	if (!ep->eof_callbacks)
 		return false;
 
-	receiver->push_data(NULL, receiver);
+	__endpoint_invoke_callbacks(ep, &ep->eof_callbacks);
+	return true;
 }
 
 static inline void
 endpoint_close_callback(struct endpoint *ep)
 {
-	struct receiver *receiver = ep->receiver;
-
-	if (receiver && receiver->close_callback)
-		receiver->close_callback(ep, receiver);
+	__endpoint_invoke_callbacks(ep, &ep->close_callbacks);
 }
 
 #endif /* _ENDPOINT_H */

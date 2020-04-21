@@ -182,6 +182,10 @@ io_mainloop(long timeout)
 			return -1;
 		}
 
+		wait_ms = ms_now() - now;
+		if (wait_ms >= 500)
+			printf("poll slept for %lu ms\n", wait_ms);
+
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
 
@@ -199,6 +203,7 @@ io_mainloop(long timeout)
 			}
 		}
 
+		now = ms_now();
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
 
@@ -208,6 +213,8 @@ io_mainloop(long timeout)
 			}
 
 			if (pfd[i].revents & POLLIN) {
+				ep->recv_ts = now;
+
 				endpoint_debug(ep, "socket has data");
 				count = endpoint_receive(ep);
 				if (count < 0) {
@@ -222,6 +229,8 @@ io_mainloop(long timeout)
 
 				endpoint_debug(ep, "socket received %d bytes", count);
 				endpoint_data_sink_callback(ep);
+
+				ep->last_recv_ts = ep->recv_ts;
 			}
 		}
 

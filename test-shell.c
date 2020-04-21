@@ -8,6 +8,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stdint.h>
+#include <netinet/in.h>
 #include "shell.h"
 #include "endpoint.h"
 #include "testing.h"
@@ -21,18 +23,223 @@ struct io_forwarder {
 	struct console_slave *	process;
 };
 
+struct shell_receiver {
+	struct receiver		base;
+	struct queue		queue;
+	struct receiver *	next;
+};
+
+struct shell_sender {
+	struct sender		base;
+	struct queue		queue;
+	struct sender *		next;
+};
+
+struct packet_header {
+	uint32_t		magic;
+	uint16_t		type;
+	uint16_t		len;
+};
+#define PACKET_HEADER_MAGIC	0x50feeb1e
+#define PACKET_MAX_DATA		1024
+
+enum {
+	PKT_TYPE_DATA,
+	PKT_TYPE_WINDOW,
+	PKT_TYPE_SIGNAL,
+
+	__PKT_TYPE_MAX
+};
+
+/*
+ * Passthru senders and receivers
+ */
+static struct receiver *
+passthru_receiver(struct queue *q)
+{
+	struct receiver *r;
+
+	r = calloc(1, sizeof(*r));
+	r->recvq = q;
+	return r;
+}
+
+static struct sender *
+passthru_sender(struct queue **qp)
+{
+	struct sender *s;
+
+	s = calloc(1, sizeof(*s));
+	s->sendqp = qp;
+	return s;
+}
+
+/*
+ * Process one or more incoming packets
+ */
+static void
+__io_shell_process_packet(const struct packet_header *hdr, struct queue *q, struct shell_receiver *r)
+{
+	struct receiver *next = r->next;
+	void *buffer;
+	const void *p;
+
+	buffer = alloca(hdr->len);
+	p = queue_peek(q, buffer, hdr->len);
+
+	if (hdr->type != PKT_TYPE_DATA) {
+		fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
+		return;
+	}
+
+	queue_append(next->recvq, p, hdr->len);
+	queue_advance_head(q, hdr->len);
+
+	if (next->push_data)
+		next->push_data(next->recvq, next);
+}
+
+void
+io_shell_process_packets(struct queue *q, struct shell_receiver *r)
+{
+	static unsigned int HDRLEN = sizeof(struct packet_header);
+	struct packet_header hdrbuf;
+	const struct packet_header *p;
+
+	while (queue_available(q) >= HDRLEN) {
+		p = queue_peek(q, &hdrbuf, HDRLEN);
+		if (p != &hdrbuf)
+			memcpy(&hdrbuf, p, HDRLEN);
+
+		hdrbuf.magic = ntohl(hdrbuf.magic);
+		hdrbuf.type = ntohs(hdrbuf.type);
+		hdrbuf.len = ntohs(hdrbuf.len);
+
+		//test_trace("packet 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
+		if (hdrbuf.magic != PACKET_HEADER_MAGIC
+		 || hdrbuf.type >= __PKT_TYPE_MAX) {
+			fprintf(stderr, "Bad packet header\n");
+			test_trace("packet magic 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
+			exit(1);
+			return; /* error */
+		}
+
+		if (queue_available(q) < HDRLEN + hdrbuf.len)
+			return;
+
+		if (queue_tailroom(r->next->recvq) < hdrbuf.len) {
+			test_trace("not enough room in next layer, cannot queue incoming data packet\n");
+			if (test_progress)
+				write(2, "!", 1);
+			return;
+		}
+
+		/* Skip past header */
+		queue_advance_head(q, HDRLEN);
+
+		__io_shell_process_packet(&hdrbuf, q, r);
+	}
+}
+
+static bool
+io_shell_build_data_packet(struct queue *q, struct shell_sender *s)
+{
+	static unsigned int HDRLEN = sizeof(struct packet_header);
+	struct packet_header hdrbuf;
+	struct sender *next = s->next;
+	unsigned int bytes, room;
+	void *buffer;
+	const void *p;
+
+	if (next && next->get_data)
+		next->get_data(&s->queue, next);
+
+	bytes = queue_available(&s->queue);
+	if (bytes == 0)
+		return false;
+
+	room = queue_tailroom(q);
+	if (room < HDRLEN + 1)
+		return false;
+
+	if (bytes > PACKET_MAX_DATA)
+		bytes = PACKET_MAX_DATA;
+	if (room < HDRLEN + bytes)
+		bytes = room - HDRLEN;
+
+	hdrbuf.magic = htonl(PACKET_HEADER_MAGIC);
+	hdrbuf.type = PKT_TYPE_DATA;
+	hdrbuf.len = htons(bytes);
+
+	queue_append(q, &hdrbuf, HDRLEN);
+
+	buffer = alloca(bytes);
+	p = queue_peek(&s->queue, buffer, bytes);
+	queue_append(q, p, bytes);
+	queue_advance_head(&s->queue, bytes);
+
+	return true;
+}
+
+/*
+ * We received data from the network.
+ * See if we have one or more full packets, and process them.
+ */
 static void
 io_shell_service_push_data(struct queue *q, struct receiver *r)
 {
-	struct io_forwarder *fwd = r->handle;
+	assert(q);
 
-	if (q != NULL) {
-		/* Nothing for us to do. Data has already been queued
-		 * up for the pty master, and the mainloop socket takes
-		 * care of writing that out.
-		 */
-		return;
-	}
+	assert(q == r->recvq);
+
+	io_shell_process_packets(q, (struct shell_receiver *) r);
+	return;
+}
+
+static struct receiver *
+shell_service_receiver(struct receiver *next)
+{
+	struct shell_receiver *r;
+
+	r = calloc(1, sizeof(*r));
+	r->base.push_data = io_shell_service_push_data;
+	r->base.recvq = &r->queue;
+
+	r->next = next;
+
+	return &r->base;
+}
+
+static void
+io_shell_service_get_data(struct queue *q, struct sender *base_sender)
+{
+	struct shell_sender *s = (struct shell_sender *) base_sender;
+
+	/* Build data packets while there's data - and room in the
+	 * send queue */
+	while (io_shell_build_data_packet(q, s))
+		;
+}
+
+static struct sender *
+shell_service_sender(struct sender *next)
+{
+	struct shell_sender *s;
+
+	s = calloc(1, sizeof(*s));
+	s->base.get_data = io_shell_service_get_data;
+
+	s->next = next;
+	if (next && next->sendqp)
+		*(next->sendqp) = &s->queue;
+
+	return &s->base;
+}
+
+static void
+io_forwarder_eof_callback(struct endpoint *ep, void *handle)
+{
+	struct io_forwarder *fwd = handle;
 
 	/* We received an EOF from the client.
 	 * We should now switch the pty master socket to sending a
@@ -53,9 +260,9 @@ io_shell_service_push_data(struct queue *q, struct receiver *r)
 }
 
 static void
-io_shell_service_close_callback(struct endpoint *ep, struct receiver *r)
+io_forwarder_close_callback(struct endpoint *ep, void *handle)
 {
-	struct io_forwarder *fwd = r->handle;
+	struct io_forwarder *fwd = handle;
 
 	if (fwd->socket == ep)
 		fwd->socket = NULL;
@@ -71,19 +278,31 @@ io_shell_service_close_callback(struct endpoint *ep, struct receiver *r)
 		free(fwd);
 }
 
-static struct receiver *
-shell_service_receiver(struct io_forwarder *fwd)
+static struct io_forwarder *
+io_forwarder_setup(struct endpoint *socket, struct console_slave *process)
 {
-	struct receiver *r;
+	struct io_forwarder *fwd;
 
-	r = calloc(1, sizeof(*r));
-	r->handle = fwd;
-	r->push_data = io_shell_service_push_data;
-	r->close_callback = io_shell_service_close_callback;
+	fwd = calloc(1, sizeof(*fwd));
+	fwd->socket = socket;
+	fwd->process = process;
 
-	return r;
+	fwd->pty = endpoint_new_pty(process->master_fd);
+
+	endpoint_set_upper_layer(socket,
+			passthru_sender(&fwd->pty->recvq),
+			passthru_receiver(&fwd->pty->sendq));
+
+	endpoint_register_eof_callback(socket, io_forwarder_eof_callback, fwd);
+	endpoint_register_close_callback(socket, io_forwarder_close_callback, fwd);
+
+	io_register_endpoint(socket);
+	io_register_endpoint(fwd->pty);
+
+	return fwd;
 }
 
+#if 0
 static struct receiver *
 shell_pty_receiver(struct io_forwarder *fwd)
 {
@@ -91,35 +310,36 @@ shell_pty_receiver(struct io_forwarder *fwd)
 
 	r = calloc(1, sizeof(*r));
 	r->handle = fwd;
-	r->close_callback = io_shell_service_close_callback;
+	r->close_callback = io_forwarder_close_callback;
+	r->recvq = &fwd->socket->sendq;
 
 	return r;
 }
+
+static struct sender *
+shell_pty_sender(struct io_forwarder *fwd)
+{
+	struct sender *s;
+
+	s = calloc(1, sizeof(*s));
+	s->handle = fwd;
+
+	return s;
+}
+#endif
 
 struct io_forwarder *
 io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 {
 	struct io_forwarder *fwd;
-	struct endpoint *pty;
+	/* struct endpoint *pty; */
 
-	fwd = calloc(1, sizeof(*fwd));
-	fwd->socket = socket;
-	fwd->process = process;
+	fwd = io_forwarder_setup(socket, process);
 
-	socket->receiver = shell_service_receiver(fwd);
-
-	pty = endpoint_new_pty(process->master_fd);
-	pty->receiver = shell_pty_receiver(fwd);
-
-	fwd->pty = pty;
-
-	/* Incoming data from the socket goes to the pty master.
-	 * Incoming data from the shell session goes to the socket. */
-	socket->recvq = &pty->sendq;
-	pty->recvq = &socket->sendq;
-
-	io_register_endpoint(socket);
-	io_register_endpoint(pty);
+	/* Install the shell protocol layer */
+	endpoint_set_upper_layer(socket, 
+		shell_service_sender(socket->sender),
+		shell_service_receiver(socket->receiver));
 
 	return fwd;
 }
@@ -198,6 +418,7 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 {
 	struct console_slave *console;
 	struct test_client_appdata appdata;
+	struct endpoint *ep;
 	int pair[2];
 
 	printf("echo test%s%s, duration %u\n",
@@ -218,7 +439,12 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 	console = create_cat_service(pair[0]);
 
 	/* The second socket is the client socket. */
-	test_client_create(pair[1], "echo-client", &appdata);
+	ep = test_client_create(pair[1], "echo-client", &appdata);
+
+	/* Install the shell protocol layer */
+	endpoint_set_upper_layer(ep, 
+		shell_service_sender(ep->sender),
+		shell_service_receiver(ep->receiver));
 
 	io_mainloop(time * 1000);
 

@@ -62,6 +62,7 @@ extern void		test_client_print_stats(const struct test_client_appdata *appdata);
 
 #define test_trace(...) \
 	if (test_tracing) do { \
+		fflush(stdout); \
 		fprintf(stderr, __VA_ARGS__); \
 	} while (0)
 
