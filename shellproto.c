@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdint.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include "shell.h"
 #include "endpoint.h"
@@ -285,4 +287,32 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 	return ep;
 }
 
+struct endpoint *
+io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
+{
+	struct endpoint *sock;
+	int fd;
 
+	fd = socket(PF_INET, SOCK_STREAM, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+
+	if (connect(fd, (struct sockaddr *) svc_addr, sizeof(*svc_addr)) < 0 && errno != EINPROGRESS) {
+		perror("connect");
+		return NULL;
+	}
+
+	sock = endpoint_new_socket(fd);
+	sock->debug_name = "shell-client";
+
+	/* Setup a forwarder between the tty and the socket we just
+         * created. */
+        io_forwarder_setup(sock, tty_fd, NULL);
+
+	/* Install the shell protocol layer */
+	io_shell_service_install(sock);
+
+	/* endpoint_register_close_callback(sock, echo_client_close_callback, appdata); */
+
+	return sock;
+}
