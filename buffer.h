@@ -38,6 +38,7 @@ extern bool		queue_full(const struct queue *);
 extern void		queue_append(struct queue *, const void *, size_t);
 extern const void *	queue_peek(const struct queue *q, void *p, size_t count);
 extern void		queue_advance_head(struct queue *q, size_t count);
+extern void		queue_transfer(struct queue *dstq, struct queue *srcq, size_t count);
 
 static inline unsigned int
 buf_tailroom(const struct buf *bp)

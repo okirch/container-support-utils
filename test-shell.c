@@ -148,8 +148,6 @@ io_shell_build_data_packet(struct queue *q, struct shell_sender *s)
 	struct packet_header hdrbuf;
 	struct sender *next = s->next;
 	unsigned int bytes, room;
-	void *buffer;
-	const void *p;
 
 	if (next && next->get_data)
 		next->get_data(&s->queue, next);
@@ -173,10 +171,8 @@ io_shell_build_data_packet(struct queue *q, struct shell_sender *s)
 
 	queue_append(q, &hdrbuf, HDRLEN);
 
-	buffer = alloca(bytes);
-	p = queue_peek(&s->queue, buffer, bytes);
-	queue_append(q, p, bytes);
-	queue_advance_head(&s->queue, bytes);
+	/* Transfer bytes from raw dataq to shell layer packet queue */
+	queue_transfer(q, &s->queue, bytes);
 
 	return true;
 }

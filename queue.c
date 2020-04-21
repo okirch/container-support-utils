@@ -158,3 +158,19 @@ queue_advance_head(struct queue *q, size_t count)
                 buf_free(bp);
         }
 }
+
+void
+queue_transfer(struct queue *dstq, struct queue *srcq, size_t count)
+{
+	void *buffer;
+	const void *p;
+
+	assert(queue_tailroom(dstq) >= count);
+	assert(queue_available(srcq) >= count);
+
+	buffer = alloca(count);
+        p = queue_peek(srcq, buffer, count);
+        queue_append(dstq, p, count);
+        queue_advance_head(srcq, count);
+
+}
