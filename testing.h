@@ -1,6 +1,8 @@
 #ifndef _TESTING_H
 #define _TESTING_H
 
+#include "tracing.h"
+
 struct test_case_info {
 	const char *	name;
 	unsigned int	id;
@@ -70,5 +72,7 @@ extern void		test_client_print_stats(const struct test_client_appdata *appdata);
 		fflush(stdout); \
 		fprintf(stderr, __VA_ARGS__); \
 	} while (0)
+
+extern void		__test_trace_hook(const char *fmt, ...);
 
 #endif /* _TESTING_H */

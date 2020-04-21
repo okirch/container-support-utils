@@ -19,7 +19,8 @@ LIBSRCS		= shellproto.c \
 		  mainloop.c \
 		  endpoint.c \
 		  queue.c \
-		  buffer.c
+		  buffer.c \
+		  tracing.c
 LIBOBJS		= $(LIBSRCS:.c=.o)
 LINK		= -L. -lconsole -lutil
 

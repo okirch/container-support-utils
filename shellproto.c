@@ -14,6 +14,7 @@
 #include <netinet/in.h>
 #include "shell.h"
 #include "endpoint.h"
+#include "tracing.h"
 
 
 struct packet_header {
@@ -82,7 +83,7 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 		if (hdrbuf.magic != PACKET_HEADER_MAGIC
 		 || hdrbuf.type >= __PKT_TYPE_MAX) {
 			fprintf(stderr, "Bad packet header\n");
-			/* test_trace("packet magic 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len); */
+			trace("packet magic 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
 			exit(1);
 			return false; /* error */
 		}
@@ -91,7 +92,7 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 			return false;
 
 		if (queue_tailroom(next->recvq) < hdrbuf.len) {
-			/* test_trace("not enough room in next layer, leave incoming packet in packet queue\n"); */
+			trace("not enough room in next layer, leave incoming packet in packet queue\n");
 			return true;
 		}
 

@@ -8,7 +8,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <assert.h>
+#include <stdarg.h>
 #include "buffer.h"
 #include "testing.h"
 
@@ -23,6 +23,24 @@ bool			test_tracing;
 bool			test_progress;
 
 static bool		done = false;
+
+
+/*
+ * This hook is installed with the lower layer library functions to
+ * get tracing in the test utils
+ */
+void
+__test_trace_hook(const char *fmt, ...)
+{
+	va_list ap;
+
+	if (!test_tracing)
+		return;
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+}
 
 /*
  * Command line handling
@@ -146,6 +164,9 @@ test_parse_arguments(const struct test_app *app, struct test_util_options *opts,
 			opts->tests |= (1 << id);
 		}
 	}
+
+	if (test_tracing)
+		__tracing_hook = __test_trace_hook;
 }
 
 static void

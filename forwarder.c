@@ -16,6 +16,7 @@
 
 #include "shell.h"
 #include "endpoint.h"
+#include "tracing.h"
 
 #include <fcntl.h>
 
@@ -47,7 +48,7 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 {
 	struct io_forwarder *fwd = handle;
 
-	/* test_trace("%s(%s)\n", __func__, endpoint_debug_name(ep)); */
+	trace("%s(%s)\n", __func__, endpoint_debug_name(ep));
 	if (ep == fwd->socket) {
 		/* We received an EOF from the client.
 		 * We should now switch the pty master socket to sending a
@@ -55,7 +56,7 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 		 * which we don't, for now.
 		 * Instead, just kill the child process.
 		 */
-		/* test_trace("=== Hanging up PTY master ===\n"); */
+		trace("=== Hanging up PTY master ===\n");
 		if (fwd->pty)
 			queue_destroy(&fwd->pty->sendq);
 		if (fwd->process)
@@ -64,7 +65,7 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 	if (ep == fwd->pty) {
 		/* We received a hangup from the pty slave.
 		 */
-		/* test_trace("=== Hanging up PTY master ===\n"); */
+		trace("=== Hanging up PTY master ===\n");
 		if (fwd->pty) {
 			queue_destroy(&fwd->pty->sendq);
 			endpoint_shutdown_write(fwd->pty);
@@ -91,12 +92,12 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 {
 	struct io_forwarder *fwd = handle;
 
-	/* test_trace("%s(%s)\n", __func__, endpoint_debug_name(ep)); */
+	trace("%s(%s)\n", __func__, endpoint_debug_name(ep));
 	if (fwd->socket == ep) {
-		/* test_trace("=== Hangup from client ===\n"); */
+		trace("=== Hangup from client ===\n");
 		fwd->socket = NULL;
 	} else if (fwd->pty == ep) {
-		/* test_trace("=== Hangup on PTY ===\n"); */
+		trace("=== Hangup on PTY ===\n");
 		fwd->pty = NULL;
 	}
 
