@@ -237,6 +237,60 @@ endpoint_new_socket(int fd)
 }
 
 /*
+ * TCP listening socket
+ */
+static int
+__endpoint_listener_poll(const struct endpoint *ep, struct pollfd *pfd, unsigned int poll_mask)
+{
+	/* We don't do anything fancy like limiting the number of active connections. */
+	pfd->fd = ep->fd;
+	pfd->events = poll_mask & ep->poll_mask;
+	return 1;
+}
+
+static int
+__endpoint_listener_recv(struct endpoint *ep, void *p, size_t len)
+{
+	struct endpoint *connected;
+	int fd;
+
+	fd = accept(ep->fd, NULL, NULL);
+	if (fd < 0) {
+		perror("accept");
+		return 1;
+	}
+
+	connected = endpoint_new_socket(fd);
+	connected->debug = ep->debug;
+	endpoint_accept_callback(ep, connected);
+	return 1;
+}
+
+void
+endpoint_accept_callback(struct endpoint *listener, struct endpoint *new_sock)
+{
+	struct io_callback *cb;
+
+	for (cb = listener->accept_callbacks; cb; cb = cb->next)
+		cb->callback_fn(new_sock, cb->app_handle);
+}
+
+static struct endpoint_ops __endpoint_listener_ops = {
+	.poll		= __endpoint_listener_poll,
+	.recv		= __endpoint_listener_recv,
+};
+
+struct endpoint *
+endpoint_new_listener(int fd)
+{
+	struct endpoint *ep;
+
+	ep = endpoint_new(fd, &__endpoint_listener_ops);
+	ep->poll_mask = POLLIN;
+	return ep;
+}
+
+/*
  * PTY endpoint
  */
 static size_t
@@ -489,6 +543,12 @@ void
 endpoint_register_close_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
 {
 	__endpoint_register_callback(&ep->close_callbacks, fn, handle);
+}
+
+void
+endpoint_register_accept_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
+{
+	__endpoint_register_callback(&ep->accept_callbacks, fn, handle);
 }
 
 void

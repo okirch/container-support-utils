@@ -14,6 +14,9 @@
 #include "endpoint.h"
 #include "testing.h"
 
+#include <errno.h>
+#include <fcntl.h>
+
 
 struct endpoint *
 create_console_service(int fd, struct console_slave *console)
@@ -222,10 +225,194 @@ do_die_test(unsigned int time)
 	do_common_test_teardown(&appdata, console);
 }
 
+/*
+ * Echo client.
+ * This client will send a command to the remote shell service,
+ * and check for a specific pattern in the output.
+ */
+struct echo_client_appdata {
+	bool		sent;
+	bool		yesman;
+	bool		socket_closed;
+
+	unsigned int *	pending_count;
+};
+
+static void
+echo_client_get_data(struct queue *q, struct sender *s)
+{
+	static char command[] = {
+		"V=Yes; echo \"$V$V$V\"; exit 0;\n"
+	};
+	struct echo_client_appdata *appdata = s->handle;
+
+	if (appdata->sent)
+		return;
+
+	queue_append(q, command, strlen(command));
+	appdata->sent = true;
+}
+
+struct sender *
+echo_client_sender(void *handle)
+{
+	struct sender *s;
+
+	s = calloc(1, sizeof(*s));
+	s->handle = handle;
+	s->get_data = echo_client_get_data;
+
+	return s;
+}
+
+static bool
+echo_client_push_data(struct queue *q, struct receiver *r)
+{
+	struct echo_client_appdata *appdata = r->handle;
+	unsigned int bytes;
+	void *buffer;
+	const void *p;
+
+	assert(q);
+	assert(q == r->recvq);
+
+	bytes = queue_available(q);
+	buffer = alloca(bytes);
+	p = queue_peek(q, buffer, bytes);
+
+	test_trace("received \"%.*s\"\n", bytes, (const char *) p);
+	if (memmem(p, bytes, "YesYesYes", 9) != NULL)
+		appdata->yesman = true;
+
+	return false;
+}
+
+struct receiver *
+echo_client_receiver(void *handle)
+{
+	struct receiver *r;
+
+	r = calloc(1, sizeof(*r));
+	r->handle = handle;
+	r->push_data = echo_client_push_data;
+	r->recvq = &r->__queue;
+
+	return r;
+}
+
+static void
+echo_client_close_callback(struct endpoint *ep, void *handle)
+{
+	struct echo_client_appdata *appdata = handle;
+
+	appdata->socket_closed = true;
+	*(appdata->pending_count) -= 1;
+
+	if (*(appdata->pending_count) == 0)
+		io_mainloop_exit();
+}
+
+static struct endpoint *
+create_echo_client(struct echo_client_appdata *appdata, const char *name, const struct sockaddr_in *svc_addr)
+{
+	struct endpoint *ep;
+	int fd;
+
+	fd = socket(PF_INET, SOCK_STREAM, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+
+	if (connect(fd, (struct sockaddr *) svc_addr, sizeof(*svc_addr)) < 0 && errno != EINPROGRESS) {
+		perror("connect");
+		return NULL;
+	}
+
+	ep = endpoint_new_socket(fd);
+	ep->debug_name = strdup(name);
+	ep->debug = test_tracing;
+
+	memset(appdata, 0, sizeof(*appdata));
+	endpoint_set_upper_layer(ep, echo_client_sender(appdata), echo_client_receiver(appdata));
+
+	/* Install the shell protocol layer */
+	io_shell_service_install(ep);
+
+	endpoint_register_close_callback(ep, echo_client_close_callback, appdata);
+
+	return ep;
+}
+
+static struct endpoint *
+do_listener_test_setup(struct sockaddr_in *listen_addr)
+{
+	struct endpoint *ep;
+
+	ep = io_shell_service_create_listener(listen_addr);
+	ep->debug = test_tracing;
+	io_register_endpoint(ep);
+
+	return ep;
+}
+
+void
+do_listen_test(unsigned int time)
+{
+	static const unsigned int NCLIENTS = 32;
+	struct echo_client_appdata appdata[NCLIENTS];
+	struct sockaddr_in svc_addr;
+	unsigned int i, pending_count = 0;
+	bool failed = false;
+
+	printf("listener test\n");
+
+	do_listener_test_setup(&svc_addr);
+
+	for (i = 0; i < NCLIENTS; ++i) {
+		char namebuf[64];
+		struct endpoint *ep;
+
+		pending_count += 1;
+
+		snprintf(namebuf, sizeof(namebuf), "echo-client%d", i);
+		ep = create_echo_client(&appdata[i], namebuf, &svc_addr);
+		appdata[i].pending_count = &pending_count;
+
+		io_register_endpoint(ep);
+	}
+
+	if (io_mainloop(time * 1000) < 0) {
+		fprintf(stderr, "io_mainloop returns error\n");
+		exit(99);
+	}
+
+	for (i = 0; i < NCLIENTS; ++i) {
+		struct echo_client_appdata *app = &appdata[i];
+
+		if (!app->sent || !app->yesman || !app->socket_closed) {
+			fprintf(stderr, "Client %u sent=%s received=%s closed=%s\n", i,
+					app->sent? "okay" : "NO",
+					app->yesman? "okay" : "NO",
+					app->socket_closed? "okay" : "NO");
+			failed = true;
+		}
+	}
+
+	if (failed) {
+		fprintf(stderr, "FAILED\n");
+		exit(99);
+	}
+
+	printf("echo client test succeeded\n");
+
+	io_close_all();
+}
+
+
 enum {
 	TEST_CAT,
 	TEST_HANGUP,
 	TEST_DIE,
+	TEST_LISTEN,
 };
 
 int
@@ -237,6 +424,7 @@ main(int argc, char **argv)
 			{ "cat",	TEST_CAT	},
 			{ "hangup",	TEST_HANGUP	},
 			{ "die",	TEST_DIE	},
+			{ "listen",	TEST_LISTEN	},
 			{ NULL }
 		},
 	};
@@ -250,7 +438,8 @@ main(int argc, char **argv)
 		do_hangup_test(2);
 	if (opt.tests & (1 << TEST_DIE))
 		do_die_test(2);
+	if (opt.tests & (1 << TEST_LISTEN))
+		do_listen_test(opt.timeout);
 	printf("All is well.\n");
 	return 0;
 }
-

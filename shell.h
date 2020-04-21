@@ -8,6 +8,8 @@
 #define _SHELL_H
 
 #include <sys/resource.h>
+#include <netinet/in.h>
+
 #include "endpoint.h"
 
 struct console_slave {
@@ -45,5 +47,8 @@ extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, struct 
 
 extern void			io_shell_service_install(struct endpoint *ep);
 extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket, struct console_slave *process);
+
+extern struct endpoint *	io_shell_service_create_listener(struct sockaddr_in *listen_addr);
+
 
 #endif /* _SHELL_H */

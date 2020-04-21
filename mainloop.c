@@ -17,7 +17,9 @@
 
 static struct endpoint *io_endpoints[ENDPOINT_MAX];
 static unsigned int	io_endpoint_count;
+static bool		__io_mainloop_exit_next = false;
 
+/* FIXME: nuke this */
 static struct io_callback *io_callbacks;
 
 
@@ -29,6 +31,7 @@ void
 io_register_endpoint(struct endpoint *ep)
 {
 	assert(io_endpoint_count < ENDPOINT_MAX);
+	assert(ep);
 	io_endpoints[io_endpoint_count++] = ep;
 }
 
@@ -141,6 +144,12 @@ io_timestamp_ms(void)
 	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
+void
+io_mainloop_exit(void)
+{
+	__io_mainloop_exit_next = true;
+}
+
 int
 io_mainloop(long timeout)
 {
@@ -154,6 +163,11 @@ io_mainloop(long timeout)
 		struct endpoint *watching[ENDPOINT_MAX];
 		int nfds = 0, i, count;
 		unsigned long now, wait_ms;
+
+		if (__io_mainloop_exit_next) {
+			__io_mainloop_exit_next = false;
+			break;
+		}
 
 		for (i = 0; i < io_endpoint_count; ++i) {
 			struct endpoint *ep = io_endpoints[i];

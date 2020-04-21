@@ -214,3 +214,58 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 
 	return fwd;
 }
+
+static void
+__io_shell_service_accept(struct endpoint *new_socket, void *handle)
+{
+	struct console_slave *shell;
+	char *argv[] = {
+		"-sh",
+		NULL
+	};
+
+	shell = start_shell("/bin/bash", argv, -1, false);
+
+	io_shell_service_create(new_socket, shell);
+	new_socket->debug_name = "shell-service";
+}
+
+struct endpoint *
+io_shell_service_create_listener(struct sockaddr_in *listen_addr)
+{
+	struct endpoint *ep;
+	struct sockaddr_in sin;
+	socklen_t alen;
+	int listen_fd;
+
+	listen_fd = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&sin, 0, sizeof(sin));
+	if (bind(listen_fd, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+		perror("bind");
+		return NULL;
+	}
+
+	alen = sizeof(sin);
+	if (getsockname(listen_fd, (struct sockaddr *) &sin, &alen) < 0) {
+		perror("bind");
+		return NULL;
+	}
+
+	if (listen(listen_fd, 128) < 0) {
+		perror("listen");
+		return NULL;
+	}
+
+	trace("=== Listen socket bound to port %d ===\n", ntohs(sin.sin_port));
+	if (listen_addr)
+		*listen_addr = sin;
+
+	ep = endpoint_new_listener(listen_fd);
+	endpoint_register_accept_callback(ep, __io_shell_service_accept, NULL);
+	ep->debug_name = "shell-listener";
+
+	return ep;
+}
+
+
