@@ -6,6 +6,7 @@ BINDIR		= /usr/bin
 COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I. $(COPT)
 CONSOLE		= sidecar-console
+CONSOLE		= sidecar-shell
 TESTAPPS	= test-queue \
 		  test-socket \
 		  test-shell
@@ -27,7 +28,7 @@ LINK		= -L. -lconsole -lutil
 PYVERS		= python2.7
 PYLIBDIR	= /usr/lib/$(PYVERS)/site-packages/suse_sidecar
 
-all: $(PYAPP) $(PYMODULES) $(TESTAPPS) $(CONSOLE)
+all: $(PYAPP) $(PYMODULES) $(TESTAPPS) $(CONSOLE) $(SHELL)
 
 tests:	$(TESTAPPS)
 	@set -e; for t in $(TESTAPPS); do \
@@ -45,6 +46,8 @@ install: $(PYAPP) $(PYMODULES) $(CONSOLE)
 	install -m 444 $(PYMODULES) $(DESTDIR)$(PYLIBDIR)
 	install -m 755 -d $(DESTDIR)$(BINDIR)
 	install -m 555 $(PYAPP) $(DESTDIR)$(BINDIR)/suse-sidecar
+	install -m 555 $(CONSOLE) $(DESTDIR)$(BINDIR)/suse-sidecar
+	install -m 555 $(SHELL) $(DESTDIR)$(BINDIR)/suse-sidecar
 
 $(LIB): $(LIBOBJS)
 	$(AR) crv $@ $(LIBOBJS)
@@ -60,6 +63,9 @@ test-shell: test-shell.o $(TESTOBJS) $(LIB)
 
 sidecar-console: sidecar-console.o $(LIB)
 	$(CC) $(CFLAGS) -o $@ sidecar-console.o $(LINK)
+
+sidecar-shell: sidecar-shell.o $(LIB)
+	$(CC) $(CFLAGS) -o $@ sidecar-shell.o $(LINK)
 
 ifeq ($(wildcard .depend), .depend)
 include .depend

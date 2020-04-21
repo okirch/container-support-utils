@@ -4,6 +4,7 @@
 *.o
 *.a
 sidecar-console
+sidecar-shell
 test-queue
 test-socket
 test-shell
