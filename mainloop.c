@@ -23,6 +23,7 @@ static struct io_callback *io_callbacks;
 
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
+static void		io_display_sockets(const struct pollfd *pfd, unsigned int nfds);
 
 void
 io_register_endpoint(struct endpoint *ep)
@@ -163,13 +164,14 @@ io_mainloop(long timeout)
 
 			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
 				if (ep->debug)
-					endpoint_debug(ep, "poll%s", io_strpollevents(pfd[nfds].events));
+					endpoint_debug(ep, "poll.events %s", io_strpollevents(pfd[nfds].events));
 				watching[nfds++] = ep;
 			}
 		}
 
 		if (nfds == 0) {
 			fprintf(stderr, "%s: %u sockets but they're all shy\n", __func__, io_endpoint_count);
+			io_display_sockets(NULL, 0);
 			break;
 		}
 
@@ -274,7 +276,6 @@ static void
 io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds)
 {
 	unsigned long delay;
-	unsigned int i, poll_i;
 
 	delay = io_timestamp_ms() - ts;
 	if (delay < 500)
@@ -282,15 +283,23 @@ io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds)
 
 	fprintf(stderr, "====\n");
 	fprintf(stderr, "IO stall for %lu ms\n", delay);
+	io_display_sockets(pfd, nfds);
+	fprintf(stderr, "====\n");
+}
+
+void
+io_display_sockets(const struct pollfd *pfd, unsigned int nfds)
+{
+	unsigned int i, poll_i;
 
 	for (i = poll_i = 0; i < io_endpoint_count; ++i) {
 		struct endpoint *ep = io_endpoints[i];
 		unsigned int events = 0;
 
-		if (pfd[poll_i].fd == ep->fd)
+		if (poll_i < nfds && pfd[poll_i].fd == ep->fd)
 			events = pfd[poll_i++].events;
 
-		fprintf(stderr, "%-20s poll%s%s%s%s%s\n",
+		fprintf(stderr, "%-20s poll%s%s%s%s %s\n",
 				endpoint_debug_name(ep),
 				ep->write_shutdown_requested? " write_shutdown_requested" : "",
 				ep->write_shutdown_sent? " write_shutdown_sent" : "",
@@ -300,5 +309,4 @@ io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds)
 		fprintf(stderr, "    sendq %s\n", io_strqueueinfo(&ep->sendq));
 		fprintf(stderr, "    recvq %s\n", io_strqueueinfo(ep->recvq));
 	}
-	fprintf(stderr, "====\n");
 }
