@@ -17,8 +17,6 @@ struct console_slave {
 	char *		tty_name;
 	pid_t		child_pid;
 
-	struct io_callback exit_callback;
-
 	struct console_slave *next;
 	int		exit_status;
 	struct rusage	rusage;

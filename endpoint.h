@@ -63,13 +63,6 @@ struct endpoint_ops {
 	int		(*shutdown_write)(struct endpoint *);
 };
 
-/* FIXME: remove */
-struct application_ops {
-	void		(*data_source_callback)(struct queue *, void *);
-	void		(*data_sink_callback)(struct queue *, void *);
-	void		(*close_callback)(struct endpoint *, void *);
-};
-
 struct sender {
 	struct sender *	next;
 
@@ -90,20 +83,12 @@ struct receiver {
 	struct queue	__queue;
 };
 
-/* FIXME: remove */
-struct application {
-	struct sender *	(*create_sender)(void *);
-	struct receiver *(*create_receiver)(void *);
-};
-
 typedef void		endpoint_callback_fn_t(struct endpoint *ep, void *app_handle);
 struct io_callback {
 	endpoint_callback_fn_t *callback_fn;
 	void *		app_handle;
 
-	struct io_callback **prev;
 	struct io_callback *next;
-	bool		posted;
 };
 
 
@@ -130,7 +115,6 @@ extern void		endpoint_register_accept_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
 extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **, bool oneshot);
 
-extern void		endpoint_set_application(struct endpoint *ep, const struct application *, void *);
 extern void		endpoint_set_upper_layer(struct endpoint *ep,
 				struct sender *, struct receiver *);
 
@@ -139,8 +123,6 @@ extern int		io_mainloop(long timeout);
 extern void		io_mainloop_exit(void);
 extern void		io_close_all(void);
 extern unsigned long	io_timestamp_ms(void);
-
-extern void		io_register_callback(struct io_callback *);
 
 static inline size_t
 endpoint_send_size_hint(const struct endpoint *ep)

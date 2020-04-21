@@ -489,14 +489,6 @@ endpoint_set_upper_layer(struct endpoint *ep, struct sender *s, struct receiver 
 	ep->recvq = r->recvq;
 }
 
-void
-endpoint_set_application(struct endpoint *ep, const struct application *app, void *handle)
-{
-	ep->sender = app->create_sender(handle);
-        ep->receiver = app->create_receiver(handle);
-	ep->recvq = ep->receiver->recvq;
-}
-
 static void
 __endpoint_sender_free(struct sender *s)
 {

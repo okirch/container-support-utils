@@ -19,10 +19,6 @@ static struct endpoint *io_endpoints[ENDPOINT_MAX];
 static unsigned int	io_endpoint_count;
 static bool		__io_mainloop_exit_next = false;
 
-/* FIXME: nuke this */
-static struct io_callback *io_callbacks;
-
-
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
 static void		io_display_sockets(const struct pollfd *pfd, unsigned int nfds);
@@ -33,48 +29,6 @@ io_register_endpoint(struct endpoint *ep)
 	assert(io_endpoint_count < ENDPOINT_MAX);
 	assert(ep);
 	io_endpoints[io_endpoint_count++] = ep;
-}
-
-static inline void
-io_callback_insert(struct io_callback **pos, struct io_callback *cb)
-{
-	struct io_callback *next = *pos;
-
-	cb->prev = pos;
-	cb->next = next;
-	if (next)
-		next->prev = &cb->next;
-	*pos = cb;
-}
-
-static inline void
-io_callback_remove(struct io_callback *cb)
-{
-	struct io_callback **pos = cb->prev;
-	struct io_callback *next = cb->next;
-
-	*pos = next;
-	if (next)
-		next->prev = pos;
-
-	cb->prev = NULL;
-	cb->next = NULL;
-}
-
-void
-io_register_callback(struct io_callback *cb)
-{
-	assert(cb->prev == NULL);
-	io_callback_insert(&io_callbacks, cb);
-}
-
-void
-io_unregister_callback(struct io_callback *cb)
-{
-	if (cb->prev == NULL)
-		return;
-
-	io_callback_remove(cb);
 }
 
 void
