@@ -87,6 +87,7 @@ __io_shell_process_packet(const struct packet_header *hdr, struct queue *q, stru
 
 	if (hdr->type != PKT_TYPE_DATA) {
 		fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
+		queue_advance_head(q, hdr->len);
 		return;
 	}
 
