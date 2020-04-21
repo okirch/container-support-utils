@@ -30,7 +30,6 @@ struct shell_receiver {
 
 struct shell_sender {
 	struct sender		base;
-	struct queue		queue;
 	struct sender *		next;
 };
 
@@ -216,7 +215,7 @@ static void
 io_shell_service_get_data(struct queue *q, struct sender *base_sender)
 {
 	struct shell_sender *s = (struct shell_sender *) base_sender;
-	struct queue *dataq = &s->queue;
+	struct queue *dataq = &s->base.__queue;
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
@@ -236,7 +235,7 @@ shell_service_sender(struct sender *next)
 
 	s->next = next;
 	if (next && next->sendqp)
-		*(next->sendqp) = &s->queue;
+		*(next->sendqp) = &s->base.__queue;
 
 	return &s->base;
 }

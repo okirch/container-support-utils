@@ -73,6 +73,7 @@ struct sender {
 	void		(*get_data)(struct queue *, struct sender *);
 
 	struct queue **	sendqp;
+	struct queue	__queue;
 };
 
 struct receiver {
