@@ -175,6 +175,8 @@ main(int argc, char **argv)
 
 	test_parse_arguments(&appinfo, &opt, argc, argv);
 
+	io_mainloop_detect_stalls();
+
 	if (opt.tests & (1 << TEST_PIPE))
 		do_pipe_test(opt.timeout, true, false);
 	if (opt.tests & (1 << TEST_ECHO))

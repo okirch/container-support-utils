@@ -121,6 +121,7 @@ extern void		endpoint_set_upper_layer(struct endpoint *ep,
 extern void		io_register_endpoint(struct endpoint *ep);
 extern int		io_mainloop(long timeout);
 extern void		io_mainloop_exit(void);
+extern void		io_mainloop_detect_stalls(void);
 extern void		io_close_all(void);
 extern unsigned long	io_timestamp_ms(void);
 

@@ -18,6 +18,7 @@
 static struct endpoint *io_endpoints[ENDPOINT_MAX];
 static unsigned int	io_endpoint_count;
 static bool		__io_mainloop_exit_next = false;
+static bool		__io_mainloop_detect_stalls = false;
 
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
@@ -104,6 +105,12 @@ io_mainloop_exit(void)
 	__io_mainloop_exit_next = true;
 }
 
+void
+io_mainloop_detect_stalls(void)
+{
+	__io_mainloop_detect_stalls = true;
+}
+
 int
 io_mainloop(long timeout)
 {
@@ -162,7 +169,8 @@ io_mainloop(long timeout)
 		}
 
 		/* For testing purposes only */
-		io_stall_detect(now, pfd, nfds);
+		if (__io_mainloop_detect_stalls)
+			io_stall_detect(now, pfd, nfds);
 
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];

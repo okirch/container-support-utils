@@ -379,7 +379,9 @@ do_listener_test_setup(struct sockaddr_in *listen_addr)
 {
 	struct endpoint *ep;
 
-	ep = io_shell_service_create_listener(listen_addr);
+	memset(listen_addr, 0, sizeof(*listen_addr));
+
+	ep = io_shell_service_create_listener(NULL, listen_addr);
 	ep->debug = test_tracing;
 	io_register_endpoint(ep);
 
@@ -497,6 +499,8 @@ main(int argc, char **argv)
 		},
 	};
 	struct test_util_options opt;
+
+	io_mainloop_detect_stalls();
 
 	test_parse_arguments(&appinfo, &opt, argc, argv);
 
