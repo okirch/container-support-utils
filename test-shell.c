@@ -23,14 +23,6 @@ struct io_forwarder {
 	struct console_slave *	process;
 };
 
-struct shell_receiver {
-	struct receiver		base;
-};
-
-struct shell_sender {
-	struct sender		base;
-};
-
 struct packet_header {
 	uint32_t		magic;
 	uint16_t		type;
@@ -198,25 +190,24 @@ io_shell_service_push_data(struct queue *q, struct receiver *r)
 static struct receiver *
 shell_service_receiver(struct receiver *next)
 {
-	struct shell_receiver *r;
+	struct receiver *r;
 
 	r = calloc(1, sizeof(*r));
-	r->base.push_data = io_shell_service_push_data;
-	r->base.recvq = &r->base.__queue;
-	r->base.next = next;
+	r->push_data = io_shell_service_push_data;
+	r->recvq = &r->__queue;
+	r->next = next;
 
-	return &r->base;
+	return r;
 }
 
 static void
-io_shell_service_get_data(struct queue *q, struct sender *base_sender)
+io_shell_service_get_data(struct queue *q, struct sender *s)
 {
-	struct shell_sender *s = (struct shell_sender *) base_sender;
-	struct queue *dataq = &s->base.__queue;
+	struct queue *dataq = &s->__queue;
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
-	while (io_shell_build_data_packet(q, dataq, s->base.next)) {
+	while (io_shell_build_data_packet(q, dataq, s->next)) {
 		if (test_progress)
 			write(2, "s", 1);
 	}
@@ -225,16 +216,16 @@ io_shell_service_get_data(struct queue *q, struct sender *base_sender)
 static struct sender *
 shell_service_sender(struct sender *next)
 {
-	struct shell_sender *s;
+	struct sender *s;
 
 	s = calloc(1, sizeof(*s));
-	s->base.get_data = io_shell_service_get_data;
+	s->get_data = io_shell_service_get_data;
 
-	s->base.next = next;
+	s->next = next;
 	if (next && next->sendqp)
-		*(next->sendqp) = &s->base.__queue;
+		*(next->sendqp) = &s->__queue;
 
-	return &s->base;
+	return s;
 }
 
 static void
