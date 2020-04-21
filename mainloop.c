@@ -93,7 +93,7 @@ io_close_dead(void)
 	for (i = j = 0; i < io_endpoint_count; ++i) {
 		struct endpoint *ep = io_endpoints[i];
 
-		if (ep->write_shutdown_sent && ep->read_shutdown_received) {
+		if (ep->nuke_me || (ep->write_shutdown_sent && ep->read_shutdown_received)) {
 			endpoint_debug(ep, "socket is a zombie");
 			dead[ndead++] = ep;
 
@@ -209,11 +209,12 @@ io_mainloop(long timeout)
 			struct endpoint *ep = watching[i];
 
 			if (pfd[i].revents & POLLOUT) {
-				endpoint_debug(ep, "socket can send");
+				endpoint_debug(ep, "socket can send (%lu bytes in queue)", queue_available(&ep->sendq));
 				count = endpoint_transmit(ep);
 				if (count < 0) {
 					endpoint_error(ep, "socket transmit error");
-					return -1;
+					ep->nuke_me = true;
+					continue;
 				}
 
 				endpoint_debug(ep, "socket transmitted %d bytes", count);

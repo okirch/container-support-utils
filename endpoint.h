@@ -19,6 +19,7 @@ struct endpoint {
 	unsigned int	write_shutdown_requested : 1,
 			write_shutdown_sent : 1,
 			read_shutdown_received : 1;
+	bool		nuke_me;
 	bool		have_unconsumed_data;
 
 	bool		debug;
