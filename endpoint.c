@@ -492,15 +492,19 @@ endpoint_register_close_callback(struct endpoint *ep, endpoint_callback_fn_t *fn
 }
 
 void
-__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list)
+__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list, bool oneshot)
 {
 	struct io_callback *cb;
 
 	while ((cb = *list) != NULL) {
-		*list = cb->next;
-
 		cb->callback_fn(ep, cb->app_handle);
-		free(cb);
+
+		if (oneshot) {
+			*list = cb->next;
+			free(cb);
+		} else {
+			list = &cb->next;
+		}
 	}
 }
 

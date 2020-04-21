@@ -122,7 +122,7 @@ extern void		endpoint_register_eof_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
 extern void		endpoint_register_close_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
-extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **);
+extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **, bool oneshot);
 
 extern void		endpoint_set_application(struct endpoint *ep, const struct application *, void *);
 extern void		endpoint_set_upper_layer(struct endpoint *ep,
@@ -190,14 +190,14 @@ endpoint_eof_callback(struct endpoint *ep)
 	if (!ep->eof_callbacks)
 		return false;
 
-	__endpoint_invoke_callbacks(ep, &ep->eof_callbacks);
+	__endpoint_invoke_callbacks(ep, &ep->eof_callbacks, true);
 	return true;
 }
 
 static inline void
 endpoint_close_callback(struct endpoint *ep)
 {
-	__endpoint_invoke_callbacks(ep, &ep->close_callbacks);
+	__endpoint_invoke_callbacks(ep, &ep->close_callbacks, true);
 }
 
 #endif /* _ENDPOINT_H */
