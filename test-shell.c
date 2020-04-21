@@ -475,7 +475,7 @@ do_common_test_teardown(struct test_client_appdata *appdata, struct console_slav
 }
 
 void
-do_cat_test(unsigned int time, bool random_send, bool random_recv)
+do_cat_test(unsigned int time)
 {
 	struct console_slave *console;
 	struct test_client_appdata appdata;
@@ -490,7 +490,7 @@ do_cat_test(unsigned int time, bool random_send, bool random_recv)
 }
 
 void
-do_hangup_test(unsigned int time, bool random_send, bool random_recv)
+do_hangup_test(unsigned int time)
 {
 	struct console_slave *console;
 	struct test_client_appdata appdata;
@@ -543,9 +543,9 @@ main(int argc, char **argv)
 	test_parse_arguments(&appinfo, &opt, argc, argv);
 
 	if (opt.tests & (1 << TEST_CAT))
-		do_cat_test(opt.timeout, true, false);
+		do_cat_test(opt.timeout);
 	if (opt.tests & (1 << TEST_HANGUP))
-		do_hangup_test(2, true, false);
+		do_hangup_test(2);
 	printf("All is well.\n");
 	return 0;
 }
