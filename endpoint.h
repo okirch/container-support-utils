@@ -49,9 +49,9 @@ struct endpoint {
 
 	const struct endpoint_ops *ops;
 
-	struct io_callback *eof_callbacks;
-	struct io_callback *close_callbacks;
-	struct io_callback *accept_callbacks;
+	struct endpoint_callback *eof_callbacks;
+	struct endpoint_callback *close_callbacks;
+	struct endpoint_callback *accept_callbacks;
 };
 
 /* These should really be called transport_ops */
@@ -84,11 +84,11 @@ struct receiver {
 };
 
 typedef void		endpoint_callback_fn_t(struct endpoint *ep, void *app_handle);
-struct io_callback {
+struct endpoint_callback {
 	endpoint_callback_fn_t *callback_fn;
 	void *		app_handle;
 
-	struct io_callback *next;
+	struct endpoint_callback *next;
 };
 
 
@@ -113,7 +113,7 @@ extern void		endpoint_register_close_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
 extern void		endpoint_register_accept_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
-extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **, bool oneshot);
+extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct endpoint_callback **, bool oneshot);
 
 extern void		endpoint_set_upper_layer(struct endpoint *ep,
 				struct sender *, struct receiver *);

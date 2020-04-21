@@ -19,7 +19,7 @@
 
 static void	__endpoint_sender_free(struct sender *s);
 static void	__endpoint_receiver_free(struct receiver *r);
-static void	__io_free_callbacks(struct io_callback **list);
+static void	__io_free_callbacks(struct endpoint_callback **list);
 
 struct endpoint *
 endpoint_new(int fd, const struct endpoint_ops *ops)
@@ -269,7 +269,7 @@ __endpoint_listener_recv(struct endpoint *ep, void *p, size_t len)
 void
 endpoint_accept_callback(struct endpoint *listener, struct endpoint *new_sock)
 {
-	struct io_callback *cb;
+	struct endpoint_callback *cb;
 
 	for (cb = listener->accept_callbacks; cb; cb = cb->next)
 		cb->callback_fn(new_sock, cb->app_handle);
@@ -513,9 +513,9 @@ __endpoint_receiver_free(struct receiver *r)
  * Callbacks
  */
 static void
-__endpoint_register_callback(struct io_callback **list, endpoint_callback_fn_t *fn, void *handle)
+__endpoint_register_callback(struct endpoint_callback **list, endpoint_callback_fn_t *fn, void *handle)
 {
-	struct io_callback *cb;
+	struct endpoint_callback *cb;
 
 	cb = calloc(1, sizeof(*cb));
 	cb->callback_fn = fn;
@@ -544,9 +544,9 @@ endpoint_register_accept_callback(struct endpoint *ep, endpoint_callback_fn_t *f
 }
 
 void
-__endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list, bool oneshot)
+__endpoint_invoke_callbacks(struct endpoint *ep, struct endpoint_callback **list, bool oneshot)
 {
-	struct io_callback *cb;
+	struct endpoint_callback *cb;
 
 	while ((cb = *list) != NULL) {
 		cb->callback_fn(ep, cb->app_handle);
@@ -561,9 +561,9 @@ __endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list, bool
 }
 
 void
-__io_free_callbacks(struct io_callback **list)
+__io_free_callbacks(struct endpoint_callback **list)
 {
-	struct io_callback *cb;
+	struct endpoint_callback *cb;
 
 	while ((cb = *list) != NULL) {
 		*list = cb->next;
