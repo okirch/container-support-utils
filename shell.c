@@ -117,8 +117,18 @@ start_shell(const char *cmd, char * const * argv, int procfd)
 void
 process_hangup(struct console_slave *process)
 {
-	close(process->master_fd);
-        process->master_fd = open("/dev/null", O_RDWR);
+	int fd;
+
+	if (process->master_fd < 0)
+		return;
+
+	fd = open("/dev/null", O_RDWR);
+	if (fd < 0) {
+		perror("/dev/null");
+		exit(66);
+	}
+
+	dup2(fd, process->master_fd);
 }
 
 static int
