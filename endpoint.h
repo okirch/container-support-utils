@@ -19,6 +19,7 @@ struct endpoint {
 	unsigned int	write_shutdown_requested : 1,
 			write_shutdown_sent : 1,
 			read_shutdown_received : 1;
+	bool		have_unconsumed_data;
 
 	bool		debug;
 	const char *	debug_name;
@@ -75,7 +76,7 @@ struct sender {
 
 struct receiver {
 	void *		handle;
-	void		(*push_data)(struct queue *, struct receiver *);
+	bool		(*push_data)(struct queue *, struct receiver *);
 
 	struct queue *	recvq;
 	struct queue	__queue;
@@ -169,8 +170,12 @@ endpoint_data_sink_callback(struct endpoint *ep)
 {
 	struct receiver *receiver = ep->receiver;
 
-	if (receiver && receiver->push_data && ep->recvq)
-		receiver->push_data(ep->recvq, receiver);
+	if (receiver && receiver->push_data && ep->recvq) {
+		if (receiver->push_data(ep->recvq, receiver)) {
+			endpoint_debug(ep, "receiver could not process all data");
+			ep->have_unconsumed_data = true;
+		}
+	}
 }
 
 static inline bool

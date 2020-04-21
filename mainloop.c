@@ -1,7 +1,7 @@
 /*
- * forwarder.c
+ * mainloop.c
  *
- * Forward data between pty/socket
+ * I/O mainloop processing
  */
 
 #include <stdlib.h>
@@ -155,6 +155,11 @@ io_mainloop(long timeout)
 
 			if (!ep->write_shutdown_requested)
 				endpoint_data_source_callback(ep);
+
+			if (ep->have_unconsumed_data) {
+				ep->have_unconsumed_data = false;
+				endpoint_data_sink_callback(ep);
+			}
 
 			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
 				if (ep->debug)

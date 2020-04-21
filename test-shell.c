@@ -98,7 +98,12 @@ __io_shell_process_packet(const struct packet_header *hdr, struct queue *q, stru
 		next->push_data(next->recvq, next);
 }
 
-void
+/*
+ * Process packets that sit in our queue.
+ * Returns true IFF there are remaining packets that we could not
+ * process (eg because the next receiver's queue was already full).
+ */
+static bool
 io_shell_process_packets(struct queue *q, struct receiver *next)
 {
 	static unsigned int HDRLEN = sizeof(struct packet_header);
@@ -120,17 +125,17 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 			fprintf(stderr, "Bad packet header\n");
 			test_trace("packet magic 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
 			exit(1);
-			return; /* error */
+			return false; /* error */
 		}
 
 		if (queue_available(q) < HDRLEN + hdrbuf.len)
-			return;
+			return false;
 
 		if (queue_tailroom(next->recvq) < hdrbuf.len) {
 			test_trace("not enough room in next layer, cannot queue incoming data packet\n");
 			if (test_progress)
 				write(2, "!", 1);
-			return;
+			return true;
 		}
 
 		/* Skip past header */
@@ -138,6 +143,8 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 
 		__io_shell_process_packet(&hdrbuf, q, next);
 	}
+
+	return false;
 }
 
 static bool
@@ -179,14 +186,16 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
  * We received data from the network.
  * See if we have one or more full packets, and process them.
  */
-static void
+static bool
 io_shell_service_push_data(struct queue *q, struct receiver *r)
 {
 	assert(q);
 
 	assert(q == r->recvq);
 
-	io_shell_process_packets(q, ((struct shell_receiver *) r)->next);
+	if (test_progress)
+		write(2, "r", 1);
+	return io_shell_process_packets(q, ((struct shell_receiver *) r)->next);
 }
 
 static struct receiver *
@@ -211,8 +220,10 @@ io_shell_service_get_data(struct queue *q, struct sender *base_sender)
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
-	while (io_shell_build_data_packet(q, dataq, s->next))
-		;
+	while (io_shell_build_data_packet(q, dataq, s->next)) {
+		if (test_progress)
+			write(2, "s", 1);
+	}
 }
 
 static struct sender *

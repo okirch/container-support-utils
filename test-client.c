@@ -61,7 +61,7 @@ test_client_sender(void *handle)
 	return s;
 }
 
-static void
+static bool
 test_client_push_data(struct queue *q, struct receiver *r)
 {
 	struct test_client_appdata *appdata = r->handle;
@@ -82,6 +82,7 @@ test_client_push_data(struct queue *q, struct receiver *r)
 		write(1, "+", 1);
 
 	test_client_timing_update(&appdata->recv_timing);
+	return false;
 }
 
 static void
