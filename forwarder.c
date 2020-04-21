@@ -106,8 +106,17 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 	if (fwd->socket)
 		fwd->socket->recvq = NULL;
 
-	if (fwd->pty == NULL && fwd->socket == NULL)
+	if (fwd->pty == NULL && fwd->socket == NULL) {
+		if (fwd->process) {
+			if (fwd->process->child_pid) {
+				trace("%s: killing child process %d\n", endpoint_debug_name(ep), fwd->process->child_pid);
+				process_kill(fwd->process);
+				process_wait(fwd->process);
+			}
+			process_free(fwd->process);
+		}
 		free(fwd);
+	}
 }
 
 struct io_forwarder *

@@ -29,6 +29,7 @@ extern int			process_kill(struct console_slave *proc);
 extern int			process_wait(struct console_slave *proc);
 extern int			process_killsignal(const struct console_slave *proc);
 extern int			process_exitstatus(const struct console_slave *proc);
+extern void			process_free(struct console_slave *proc);
 
 /*
  * Doesn't really belong here

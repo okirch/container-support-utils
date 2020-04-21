@@ -226,3 +226,23 @@ process_kill(struct console_slave *proc)
 	__unblock_sigchild(&oset);
 	return rv;
 }
+
+void
+process_free(struct console_slave *proc)
+{
+	struct console_slave **pos, *rovr;
+	sigset_t oset;
+
+	assert(proc->child_pid == 0);
+
+	__block_sigchild(&oset);
+	for (pos = &processes; (rovr = *pos) != NULL; pos = &rovr->next) {
+		if (rovr == proc) {
+			*pos = rovr->next;
+			break;
+		}
+	}
+	__unblock_sigchild(&oset);
+
+	free(proc);
+}
