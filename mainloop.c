@@ -97,6 +97,10 @@ io_close_dead(void)
 			endpoint_debug(ep, "socket is a zombie");
 			dead[ndead++] = ep;
 
+			if (ep->eof_callbacks) {
+				/* FIXME: invoke the EOF callbacks now? */
+			}
+
 			endpoint_close_callback(ep);
 		} else {
 			io_endpoints[j++] = ep;

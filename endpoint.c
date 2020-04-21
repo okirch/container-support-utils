@@ -17,6 +17,9 @@
 #include <assert.h>
 #include <endpoint.h>
 
+static void	__endpoint_sender_free(struct sender *s);
+static void	__endpoint_receiver_free(struct receiver *r);
+static void	__io_free_callbacks(struct io_callback **list);
 
 struct endpoint *
 endpoint_new(int fd, const struct endpoint_ops *ops)
@@ -83,6 +86,14 @@ endpoint_free(struct endpoint *ep)
 {
 	if (ep->fd >= 0)
 		close(ep->fd);
+
+	__io_free_callbacks(&ep->eof_callbacks);
+	__io_free_callbacks(&ep->close_callbacks);
+
+	if (ep->sender)
+		__endpoint_sender_free(ep->sender);
+	if (ep->receiver)
+		__endpoint_receiver_free(ep->receiver);
 
 	queue_destroy(&ep->sendq);
 	free(ep);
@@ -432,6 +443,26 @@ endpoint_set_application(struct endpoint *ep, const struct application *app, voi
 	ep->recvq = ep->receiver->recvq;
 }
 
+static void
+__endpoint_sender_free(struct sender *s)
+{
+	if (s->next)
+		__endpoint_sender_free(s->next);
+	queue_destroy(&s->__queue);
+	memset(s, 0xAA, sizeof(*s));
+	free(s);
+}
+
+static void
+__endpoint_receiver_free(struct receiver *r)
+{
+	if (r->next)
+		__endpoint_receiver_free(r->next);
+	queue_destroy(&r->__queue);
+	memset(r, 0xAA, sizeof(*r));
+	free(r);
+}
+
 /*
  * Callbacks
  */
@@ -469,6 +500,17 @@ __endpoint_invoke_callbacks(struct endpoint *ep, struct io_callback **list)
 		*list = cb->next;
 
 		cb->callback_fn(ep, cb->app_handle);
+		free(cb);
+	}
+}
+
+void
+__io_free_callbacks(struct io_callback **list)
+{
+	struct io_callback *cb;
+
+	while ((cb = *list) != NULL) {
+		*list = cb->next;
 		free(cb);
 	}
 }
