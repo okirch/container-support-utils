@@ -34,11 +34,17 @@ extern void			process_free(struct console_slave *proc);
 /*
  * Doesn't really belong here
  */
+struct io_window {
+	unsigned int	rows, cols;
+};
+
 struct io_forwarder {
 	struct endpoint *	socket;
 	struct endpoint *	pty;
 
 	struct console_slave *	process;
+
+	struct io_window	window;
 };
 
 extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, int tty_fd, struct console_slave *process);

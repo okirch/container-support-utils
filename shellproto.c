@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <assert.h>
 #include <stdint.h>
@@ -24,6 +25,13 @@ struct packet_header {
 	uint16_t		type;
 	uint16_t		len;
 };
+
+struct packet_window_size {
+	struct packet_header	hdr;
+	uint32_t		rows;
+	uint32_t		cols;
+};
+
 #define PACKET_HEADER_MAGIC	0x50feeb1e
 #define PACKET_MAX_DATA		1024
 
@@ -46,6 +54,21 @@ __io_shell_process_packet(const struct packet_header *hdr, struct queue *q, stru
 
 	buffer = alloca(hdr->len);
 	p = queue_peek(q, buffer, hdr->len);
+
+	if (hdr->type == PKT_TYPE_WINDOW
+	 && hdr->len == sizeof(struct packet_window_size) - sizeof(struct packet_header)) {
+		struct window {
+			uint32_t		rows;
+			uint32_t		cols;
+		} window;
+
+		memcpy(&window, p, hdr->len);
+		window.rows = ntohl(window.rows);
+		window.cols = ntohl(window.cols);
+		printf("window update <%u, %u>\n", window.rows, window.cols);
+		queue_advance_head(q, hdr->len);
+		return;
+	}
 
 	if (hdr->type != PKT_TYPE_DATA) {
 		fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
@@ -142,6 +165,28 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
 	return true;
 }
 
+static bool
+io_shell_build_window_packet(struct queue *q, const struct io_window *win)
+{
+	struct packet_window_size pkt;
+	unsigned int room;
+
+	/* printf("%s(<%u, %u>)\n", __func__, win->rows, win->cols); */
+	room = queue_tailroom(q);
+	if (room < sizeof(pkt))
+		return false;
+
+	pkt.hdr.magic = htonl(PACKET_HEADER_MAGIC);
+	pkt.hdr.type = htons(PKT_TYPE_WINDOW);
+	pkt.hdr.len = htons(sizeof(pkt) - sizeof(struct packet_header));
+	pkt.rows = htonl(win->rows);
+	pkt.cols = htonl(win->cols);
+
+	queue_append(q, &pkt, sizeof(pkt));
+
+	return true;
+}
+
 /*
  * We received data from the network.
  * See if we have one or more full packets, and process them.
@@ -173,6 +218,11 @@ static void
 io_shell_service_get_data(struct queue *q, struct sender *s)
 {
 	struct queue *dataq = &s->__queue;
+
+	/* FIXME: we may have tried to send a window update but failed
+	 * because the sendq was full. We need to detect this case
+	 * here and handle it.
+	 */
 
 	/* Build data packets while there's data - and room in the
 	 * send queue */
@@ -287,10 +337,35 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 	return ep;
 }
 
+static void
+__io_shell_client_sigwinch_callback(struct endpoint *tty, void *handle)
+{
+	struct io_forwarder *fwd = handle;
+	struct winsize win;
+
+	/* printf("%s(tty=%d)\n", __func__, tty->fd); */
+	if (ioctl(tty->fd, TIOCGWINSZ, &win) < 0) {
+		perror("ioctl(TIOCGWINSZ)");
+		return;
+	}
+
+	if (fwd->window.rows != win.ws_row
+	 || fwd->window.cols != win.ws_col) {
+		fwd->window.rows = win.ws_row;
+		fwd->window.cols = win.ws_col;
+
+		if (!io_shell_build_window_packet(&fwd->socket->sendq, &fwd->window)) {
+			fprintf(stderr, "Could not push IO window update\n");
+			/* FIXME - see comment in io_shell_service_get_data() */
+		}
+	}
+}
+
 struct endpoint *
 io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
 {
 	struct endpoint *sock;
+	struct io_forwarder *fwd;
 	int fd;
 
 	fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -307,10 +382,15 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
 
 	/* Setup a forwarder between the tty and the socket we just
          * created. */
-        io_forwarder_setup(sock, tty_fd, NULL);
+        fwd = io_forwarder_setup(sock, tty_fd, NULL);
 
 	/* Install the shell protocol layer */
 	io_shell_service_install(sock);
+
+	endpoint_register_config_change_callback(fwd->pty, __io_shell_client_sigwinch_callback, fwd);
+
+	/* Send the initial window size update */
+	__io_shell_client_sigwinch_callback(fwd->pty, fwd);
 
 	/* endpoint_register_close_callback(sock, echo_client_close_callback, appdata); */
 

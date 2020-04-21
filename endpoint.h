@@ -52,6 +52,7 @@ struct endpoint {
 	struct endpoint_callback *eof_callbacks;
 	struct endpoint_callback *close_callbacks;
 	struct endpoint_callback *accept_callbacks;
+	struct endpoint_callback *config_change_callbacks;
 };
 
 /* These should really be called transport_ops */
@@ -113,6 +114,8 @@ extern void		endpoint_register_close_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
 extern void		endpoint_register_accept_callback(struct endpoint *ep,
 				endpoint_callback_fn_t *, void *);
+extern void		endpoint_register_config_change_callback(struct endpoint *ep,
+				endpoint_callback_fn_t *, void *);
 extern void		__endpoint_invoke_callbacks(struct endpoint *ep, struct endpoint_callback **, bool oneshot);
 
 extern void		endpoint_set_upper_layer(struct endpoint *ep,
@@ -122,6 +125,7 @@ extern void		io_register_endpoint(struct endpoint *ep);
 extern int		io_mainloop(long timeout);
 extern void		io_mainloop_exit(void);
 extern void		io_mainloop_detect_stalls(void);
+extern void		io_mainloop_config_changed(void);
 extern void		io_close_all(void);
 extern unsigned long	io_timestamp_ms(void);
 
@@ -188,6 +192,12 @@ static inline void
 endpoint_close_callback(struct endpoint *ep)
 {
 	__endpoint_invoke_callbacks(ep, &ep->close_callbacks, true);
+}
+
+static inline void
+endpoint_config_change_callback(struct endpoint *ep)
+{
+	__endpoint_invoke_callbacks(ep, &ep->config_change_callbacks, false);
 }
 
 extern void	endpoint_accept_callback(struct endpoint *listener, struct endpoint *new_sock);

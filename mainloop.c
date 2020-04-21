@@ -19,6 +19,7 @@ static struct endpoint *io_endpoints[ENDPOINT_MAX];
 static unsigned int	io_endpoint_count;
 static bool		__io_mainloop_exit_next = false;
 static bool		__io_mainloop_detect_stalls = false;
+static bool		__io_mainloop_config_changed = false;
 
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
@@ -111,6 +112,12 @@ io_mainloop_detect_stalls(void)
 	__io_mainloop_detect_stalls = true;
 }
 
+void
+io_mainloop_config_changed(void)
+{
+	__io_mainloop_config_changed = true;
+}
+
 int
 io_mainloop(long timeout)
 {
@@ -133,6 +140,9 @@ io_mainloop(long timeout)
 		for (i = 0; i < io_endpoint_count; ++i) {
 			struct endpoint *ep = io_endpoints[i];
 
+			if (__io_mainloop_config_changed)
+				endpoint_config_change_callback(ep);
+
 			if (!ep->write_shutdown_requested)
 				endpoint_data_source_callback(ep);
 
@@ -147,6 +157,8 @@ io_mainloop(long timeout)
 				watching[nfds++] = ep;
 			}
 		}
+
+		__io_mainloop_config_changed = false;
 
 		if (nfds == 0) {
 			fprintf(stderr, "%s: %u sockets but they're all shy\n", __func__, io_endpoint_count);

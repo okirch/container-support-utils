@@ -89,6 +89,8 @@ endpoint_free(struct endpoint *ep)
 
 	__io_free_callbacks(&ep->eof_callbacks);
 	__io_free_callbacks(&ep->close_callbacks);
+	__io_free_callbacks(&ep->accept_callbacks);
+	__io_free_callbacks(&ep->config_change_callbacks);
 
 	if (ep->sender)
 		__endpoint_sender_free(ep->sender);
@@ -541,6 +543,12 @@ void
 endpoint_register_accept_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
 {
 	__endpoint_register_callback(&ep->accept_callbacks, fn, handle);
+}
+
+void
+endpoint_register_config_change_callback(struct endpoint *ep, endpoint_callback_fn_t *fn, void *handle)
+{
+	__endpoint_register_callback(&ep->config_change_callbacks, fn, handle);
 }
 
 void

@@ -84,6 +84,9 @@ restore_tty(int fd, const struct termios *saved_termios)
 static void
 sigwinch_handler(int sig)
 {
+	/* Tell mainloop to invoke the config_changed callbacks on all
+	 * sockets/ttys. */
+	io_mainloop_config_changed();
 }
 
 static void
