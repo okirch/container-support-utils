@@ -120,7 +120,7 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 }
 
 struct io_forwarder *
-io_forwarder_setup(struct endpoint *socket, struct console_slave *process)
+io_forwarder_setup(struct endpoint *socket, int tty_fd, struct console_slave *process)
 {
 	struct io_forwarder *fwd;
 
@@ -128,7 +128,7 @@ io_forwarder_setup(struct endpoint *socket, struct console_slave *process)
 	fwd->socket = socket;
 	fwd->process = process;
 
-	fwd->pty = endpoint_new_pty(process->master_fd);
+	fwd->pty = endpoint_new_pty(tty_fd);
 	endpoint_register_eof_callback(fwd->pty, io_forwarder_eof_callback, fwd);
 	endpoint_register_close_callback(fwd->pty, io_forwarder_close_callback, fwd);
 

@@ -41,7 +41,7 @@ struct io_forwarder {
 	struct console_slave *	process;
 };
 
-extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, struct console_slave *process);
+extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, int tty_fd, struct console_slave *process);
 
 extern void			io_shell_service_install(struct endpoint *ep);
 extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket, struct console_slave *process);

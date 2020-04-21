@@ -207,7 +207,7 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 	struct io_forwarder *fwd;
 	/* struct endpoint *pty; */
 
-	fwd = io_forwarder_setup(socket, process);
+	fwd = io_forwarder_setup(socket, process->master_fd, process);
 	fwd->pty->debug_name = "pty";
 	fwd->pty->debug = socket->debug;
 
