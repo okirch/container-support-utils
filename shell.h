@@ -43,25 +43,39 @@ struct io_window {
 	unsigned int	rows, cols;
 };
 
+enum {
+	SESSION_AUTH_INIT = 0,
+	SESSION_AUTH_AUTHENTICATED,
+	SESSION_AUTH_FAILED,
+};
+
 struct io_forwarder {
 	struct endpoint *	socket;
 	struct endpoint *	pty;
 
 	struct console_slave *	process;
 
+	struct io_session_auth {
+		int		state;
+		const char *	secret;
+	} auth;
 	struct io_window	window;
 };
 
 extern struct io_forwarder *	io_forwarder_setup(struct endpoint *socket, int tty_fd, struct console_slave *process);
 extern struct event *		io_forwarder_window_event(unsigned int rows, unsigned int cols);
 
-extern void			io_shell_service_install(struct endpoint *ep);
-extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket, struct console_slave *process);
+extern void			io_shell_service_install(struct endpoint *ep, struct io_session_auth *);
+extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket,
+					struct console_slave *process,
+					const char *auth_secret);
 
 #define IO_SHELL_MAX_ARGS	16
 struct io_shell_session_settings {
 	const char *		command;
 	char *			argv[IO_SHELL_MAX_ARGS];
+
+	const char *		auth_secret;
 
 	int			procfd;
 };

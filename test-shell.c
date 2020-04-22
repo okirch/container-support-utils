@@ -27,7 +27,7 @@ create_console_service(int fd, struct console_slave *console)
 
 	socket = endpoint_new_socket(fd);
 
-	fwd = io_shell_service_create(socket, console);
+	fwd = io_shell_service_create(socket, console, NULL);
 
 	if (test_tracing) {
 		endpoint_set_debug(socket, "shell-service", -1);
@@ -67,7 +67,7 @@ create_shell_client(int fd, struct test_client_appdata *appdata)
 	ep = test_client_create(fd, "echo-client", appdata);
 
 	/* Install the shell protocol layer */
-	io_shell_service_install(ep);
+	io_shell_service_install(ep, NULL);
 
 	return ep;
 }
@@ -357,7 +357,7 @@ create_echo_client(struct echo_client_appdata *appdata, const char *name, const 
 	endpoint_set_upper_layer(ep, echo_client_sender(appdata), echo_client_receiver(appdata));
 
 	/* Install the shell protocol layer */
-	io_shell_service_install(ep);
+	io_shell_service_install(ep, NULL);
 
 	endpoint_register_close_callback(ep, echo_client_close_callback, appdata);
 

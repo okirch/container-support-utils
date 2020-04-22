@@ -49,6 +49,8 @@ enum {
 	__PKT_TYPE_MAX
 };
 
+static int		io_session_auth_state(struct io_session_auth *);
+
 /*
  * Process one or more incoming packets
  */
@@ -130,8 +132,53 @@ __io_shell_check_packet_header(const struct packet_header *hdr)
  * process (eg because the next receiver's queue was already full).
  */
 static bool
-io_shell_process_packets(struct queue *q, struct receiver *next)
+io_shell_process_packets_preauth(struct queue *q, struct receiver *r)
 {
+	struct io_session_auth *auth = r->handle;
+	const struct packet_header *hdr;
+
+	if ((hdr = __io_shell_peek_packet_header(q)) != NULL) {
+		char secret_buf[128];
+
+		if (!__io_shell_check_packet_header(hdr)) {
+			log_fatal("aborting.\n");
+			/* return error */
+		}
+
+		if (queue_available(q) < HDRLEN + hdr->len)
+			return false;
+
+		if (hdr->type != PKT_TYPE_AUTH) {
+			log_error("Unexpected packet type %d in authentication state\n", hdr->type);
+			log_fatal("aborting.\n");
+		}
+
+		if (hdr->len >= sizeof(secret_buf)) {
+			log_error("auth packet with excessively long password (%u bytes)\n", hdr->len);
+			log_fatal("aborting.\n");
+		}
+
+		/* Skip past header */
+		queue_advance_head(q, HDRLEN);
+
+		queue_get(q, secret_buf, hdr->len);
+		secret_buf[hdr->len] = '\0';
+
+		if (!strcmp(auth->secret, secret_buf)) {
+			auth->state = SESSION_AUTH_AUTHENTICATED;
+			return true;
+		}
+
+		auth->state = SESSION_AUTH_FAILED;
+	}
+
+	return false;
+}
+
+static bool
+io_shell_process_packets(struct queue *q, struct receiver *r)
+{
+	struct receiver *next = r->next;
 	const struct packet_header *hdr;
 
 	while ((hdr = __io_shell_peek_packet_header(q)) != NULL) {
@@ -144,6 +191,11 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 			return false;
 
 		switch (hdr->type) {
+		case PKT_TYPE_AUTH:
+			log_warning("Ignoring auth packet in authenticated state\n", hdr->type);
+			queue_advance_head(q, HDRLEN + hdr->len);
+			break;
+
 		case PKT_TYPE_WINDOW:
 			__io_shell_process_window_packet(hdr, q, next);
 			break;
@@ -157,7 +209,7 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 			break;
 
 		default:
-			fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
+			log_warning("Ignoring type %d packet\n", hdr->type);
 			queue_advance_head(q, HDRLEN + hdr->len);
 			break;
 		}
@@ -198,6 +250,30 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
 	/* Transfer bytes from raw dataq to shell layer packet queue */
 	queue_transfer(q, dataq, bytes);
 
+	return true;
+}
+
+static bool
+io_shell_build_banner_packet(struct queue *q, const char *msg)
+{
+	static unsigned int HDRLEN = sizeof(struct packet_header);
+	struct packet_header hdrbuf;
+	unsigned int bytes, room;
+
+	bytes = strlen(msg);
+	if (bytes == 0)
+		return false;
+
+	room = queue_tailroom(q);
+	if (room < HDRLEN + bytes)
+		return false;
+
+	hdrbuf.magic = htonl(PACKET_HEADER_MAGIC);
+	hdrbuf.type = htons(PKT_TYPE_DATA);
+	hdrbuf.len = htons(bytes);
+
+	queue_append(q, &hdrbuf, HDRLEN);
+	queue_append(q, msg, bytes);
 	return true;
 }
 
@@ -255,19 +331,28 @@ io_shell_build_window_packet(struct queue *q, const struct io_window *win)
 static bool
 io_shell_service_push_data(struct queue *q, struct receiver *r)
 {
+	struct io_session_auth *auth = r->handle;
+
 	assert(q);
 
 	assert(q == r->recvq);
 
-	return io_shell_process_packets(q, r->next);
+	if (io_session_auth_state(auth) != SESSION_AUTH_AUTHENTICATED) {
+		io_shell_process_packets_preauth(q, r);
+		if (io_session_auth_state(auth) != SESSION_AUTH_AUTHENTICATED)
+			return false;
+	}
+
+	return io_shell_process_packets(q, r);
 }
 
 static struct receiver *
-shell_service_receiver(struct receiver *next)
+shell_service_receiver(struct receiver *next, struct io_session_auth *auth)
 {
 	struct receiver *r;
 
 	r = calloc(1, sizeof(*r));
+	r->handle = auth;
 	r->push_data = io_shell_service_push_data;
 	r->recvq = &r->__queue;
 	r->next = next;
@@ -278,7 +363,13 @@ shell_service_receiver(struct receiver *next)
 static void
 io_shell_service_get_data(struct queue *q, struct sender *s)
 {
+	struct io_session_auth *auth = s->handle;
 	struct queue *dataq = &s->__queue;
+
+	if (auth && io_session_auth_state(auth) == SESSION_AUTH_AUTHENTICATED) {
+		io_shell_build_banner_packet(q, "Authenticated. Welcome to the dark side.\r\n");
+		s->handle = NULL;
+	}
 
 	/* FIXME: we may have tried to send a window update but failed
 	 * because the sendq was full. We need to detect this case
@@ -292,11 +383,12 @@ io_shell_service_get_data(struct queue *q, struct sender *s)
 }
 
 static struct sender *
-shell_service_sender(struct sender *next)
+shell_service_sender(struct sender *next, struct io_session_auth *auth)
 {
 	struct sender *s;
 
 	s = calloc(1, sizeof(*s));
+	s->handle = auth;
 	s->get_data = io_shell_service_get_data;
 
 	s->next = next;
@@ -307,23 +399,24 @@ shell_service_sender(struct sender *next)
 }
 
 void
-io_shell_service_install(struct endpoint *ep)
+io_shell_service_install(struct endpoint *ep, struct io_session_auth *auth)
 {
 	endpoint_set_upper_layer(ep, 
-		shell_service_sender(ep->sender),
-		shell_service_receiver(ep->receiver));
+		shell_service_sender(ep->sender, auth),
+		shell_service_receiver(ep->receiver, auth));
 }
 
 struct io_forwarder *
-io_shell_service_create(struct endpoint *socket, struct console_slave *process)
+io_shell_service_create(struct endpoint *socket, struct console_slave *process, const char *auth_secret)
 {
 	struct io_forwarder *fwd;
 	/* struct endpoint *pty; */
 
 	fwd = io_forwarder_setup(socket, process->master_fd, process);
+	fwd->auth.secret = auth_secret;
 
 	/* Install the shell protocol layer */
-	io_shell_service_install(socket);
+	io_shell_service_install(socket, &fwd->auth);
 
 	return fwd;
 }
@@ -345,7 +438,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 
 	shell = start_shell(settings->command, settings->argv, settings->procfd, false);
 
-	fwd = io_shell_service_create(new_socket, shell);
+	fwd = io_shell_service_create(new_socket, shell, settings->auth_secret);
 
 	if (new_socket->debug) {
 		static unsigned int num_shell_sockets = 0;
@@ -401,6 +494,18 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 	endpoint_register_accept_callback(ep, __io_shell_service_accept, (void *) settings);
 
 	return ep;
+}
+
+static int
+io_session_auth_state(struct io_session_auth *auth)
+{
+	if (auth == NULL)
+		return SESSION_AUTH_AUTHENTICATED;
+
+	if (auth->state == SESSION_AUTH_INIT && auth->secret == NULL)
+		auth->state = SESSION_AUTH_AUTHENTICATED;
+
+	return auth->state;
 }
 
 static void
@@ -464,7 +569,7 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, const cha
 	}
 
 	/* Install the shell protocol layer */
-	io_shell_service_install(sock);
+	io_shell_service_install(sock, NULL);
 
 	/* If we've been given an auth secret, send it as first packet */
 	__io_shell_client_send_auth_secret(fwd->socket, secret);
