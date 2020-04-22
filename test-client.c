@@ -143,15 +143,14 @@ test_client_create(int fd, const char *name, struct test_client_appdata *appdata
 	struct endpoint *ep;
 
 	ep = endpoint_new_socket(fd);
-	ep->debug_name = name;
+	if (test_tracing)
+		endpoint_set_debug(ep, name, -1);
 
 	endpoint_set_upper_layer(ep,
 			test_client_sender(appdata),
 			test_client_receiver(appdata));
 
 	endpoint_register_close_callback(ep, test_client_close_callback, appdata);
-
-	ep->debug = test_tracing;
 
 	io_register_endpoint(ep);
 	return ep;

@@ -25,12 +25,13 @@ create_console_service(int fd, struct console_slave *console)
 	struct io_forwarder *fwd;
 
 	socket = endpoint_new_socket(fd);
-	socket->debug_name = "shell-service";
-	socket->debug = test_tracing;
 
 	fwd = io_shell_service_create(socket, console);
-	fwd->pty->debug_name = "cat";
-	fwd->pty->debug = test_tracing;
+
+	if (test_tracing) {
+		endpoint_set_debug(socket, "shell-service", -1);
+		endpoint_set_debug(fwd->pty, "cat", -1);
+	}
 
 	return socket;
 }
@@ -342,8 +343,8 @@ create_echo_client(struct echo_client_appdata *appdata, const char *name, const 
 	}
 
 	ep = endpoint_new_socket(fd);
-	ep->debug_name = strdup(name);
-	ep->debug = test_tracing;
+	if (test_tracing)
+		endpoint_set_debug(ep, name, -1);
 
 	memset(appdata, 0, sizeof(*appdata));
 	endpoint_set_upper_layer(ep, echo_client_sender(appdata), echo_client_receiver(appdata));
@@ -382,9 +383,11 @@ do_listener_test_setup(struct sockaddr_in *listen_addr)
 	memset(listen_addr, 0, sizeof(*listen_addr));
 
 	ep = io_shell_service_create_listener(NULL, listen_addr);
-	ep->debug = test_tracing;
-	io_register_endpoint(ep);
 
+	if (test_tracing)
+		endpoint_set_debug(ep, "shell-svc-listener", -1);
+
+	io_register_endpoint(ep);
 	return ep;
 }
 

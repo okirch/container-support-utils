@@ -15,7 +15,9 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <assert.h>
-#include <endpoint.h>
+
+#include "endpoint.h"
+#include "tracing.h"
 
 static void	__endpoint_sender_free(struct sender *s);
 static void	__endpoint_receiver_free(struct receiver *r);
@@ -33,13 +35,36 @@ endpoint_new(int fd, const struct endpoint_ops *ops)
 	return ep;
 }
 
+void
+endpoint_set_name(struct endpoint *ep, const char *name, int num)
+{
+	if (ep->__debug_name)
+		free(ep->__debug_name);
+	if (num < 0) {
+		ep->__debug_name = strdup(name);
+	} else {
+		char namebuf[66];
+
+		snprintf(namebuf, sizeof(namebuf), "%s%d", name, num);
+		ep->__debug_name = strdup(namebuf);
+	}
+}
+
+void
+endpoint_set_debug(struct endpoint *ep, const char *name, int num)
+{
+	if (name)
+		endpoint_set_name(ep, name, num);
+	ep->debug = true;
+}
+
 const char *
 endpoint_debug_name(const struct endpoint *ep)
 {
 	static char namebuf[64];
 
-	if (ep->debug_name)
-		return ep->debug_name;
+	if (ep->__debug_name)
+		return ep->__debug_name;
 
 	snprintf(namebuf, sizeof(namebuf), "fd%d", ep->fd);
 	return namebuf;
@@ -96,6 +121,9 @@ endpoint_free(struct endpoint *ep)
 		__endpoint_sender_free(ep->sender);
 	if (ep->receiver)
 		__endpoint_receiver_free(ep->receiver);
+
+	if (ep->__debug_name)
+		free(ep->__debug_name);
 
 	queue_destroy(&ep->sendq);
 	free(ep);
@@ -263,7 +291,13 @@ __endpoint_listener_recv(struct endpoint *ep, void *p, size_t len)
 	}
 
 	connected = endpoint_new_socket(fd);
-	connected->debug = ep->debug;
+
+	if (ep->debug) {
+		static unsigned int num_connected = 0;
+
+		endpoint_set_name(connected, "conn", num_connected++);
+		connected->debug = true;
+	}
 	endpoint_accept_callback(ep, connected);
 	return 1;
 }

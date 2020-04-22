@@ -273,8 +273,6 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process)
 	/* struct endpoint *pty; */
 
 	fwd = io_forwarder_setup(socket, process->master_fd, process);
-	fwd->pty->debug_name = "pty";
-	fwd->pty->debug = socket->debug;
 
 	/* Install the shell protocol layer */
 	io_shell_service_install(socket);
@@ -291,6 +289,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 		.procfd		= -1,
 	};
 	const struct io_shell_session_settings *settings = handle;
+	struct io_forwarder *fwd;
 	struct console_slave *shell;
 
 	if (settings == NULL)
@@ -298,8 +297,15 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 
 	shell = start_shell(settings->command, settings->argv, settings->procfd, false);
 
-	io_shell_service_create(new_socket, shell);
-	new_socket->debug_name = "shell-service";
+	fwd = io_shell_service_create(new_socket, shell);
+
+	if (new_socket->debug) {
+		static unsigned int num_shell_sockets = 0;
+
+		endpoint_set_name(new_socket, "shell-sock", num_shell_sockets);
+		endpoint_set_name(fwd->pty, "shell-pty", num_shell_sockets);
+		num_shell_sockets += 1;
+	}
 }
 
 struct endpoint *
@@ -345,7 +351,6 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 
 	ep = endpoint_new_listener(listen_fd);
 	endpoint_register_accept_callback(ep, __io_shell_service_accept, (void *) settings);
-	ep->debug_name = "shell-listener";
 
 	return ep;
 }
@@ -388,7 +393,6 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
 	}
 
 	sock = endpoint_new_socket(fd);
-	sock->debug_name = "shell-client";
 
 	/* Setup a forwarder between the tty and the socket we just
          * created. */

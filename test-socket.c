@@ -19,10 +19,9 @@ create_echo_service(int fd)
 	struct endpoint *ep;
 
 	ep = endpoint_new_socket(fd);
-	ep->debug_name = "echo-service";
 	ep->recvq = &ep->sendq;
-
-	ep->debug = test_tracing;
+	if (test_tracing)
+		endpoint_set_debug(ep, "echo-svc", -1);
 
 	io_register_endpoint(ep);
 	return ep;

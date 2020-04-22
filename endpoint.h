@@ -23,7 +23,7 @@ struct endpoint {
 	bool		have_unconsumed_data;
 
 	bool		debug;
-	const char *	debug_name;
+	char *		__debug_name;
 
 	struct queue	sendq;
 	struct queue *	recvq;
@@ -103,6 +103,8 @@ extern struct endpoint *endpoint_new_pty(int fd);
 extern struct endpoint *endpoint_new_listener(int fd);
 extern void		endpoint_error(const struct endpoint *, const char *fmt, ...);
 extern void		endpoint_debug(const struct endpoint *, const char *fmt, ...);
+extern void		endpoint_set_debug(struct endpoint *, const char *name, int num);
+extern void		endpoint_set_name(struct endpoint *ep, const char *name, int num);
 extern const char *	endpoint_debug_name(const struct endpoint *);
 extern void		endpoint_shutdown_write(struct endpoint *);
 extern void		endpoint_close(struct endpoint *);
