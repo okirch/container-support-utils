@@ -63,7 +63,7 @@ __io_shell_process_data_packet(const struct packet_header *hdr, struct queue *q,
 	/* Transfer data to upper layer queue and push it */
 	queue_transfer(next->recvq, q, hdr->len);
 	if (next->push_data)
-		next->push_data(next->recvq, next);
+		next->push_data(NULL, next->recvq, next);
 }
 
 static void
@@ -228,7 +228,7 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
 	unsigned int bytes, room;
 
 	if (next && next->get_data)
-		next->get_data(dataq, next);
+		next->get_data(NULL, dataq, next);
 
 	bytes = queue_available(dataq);
 	if (bytes == 0)
@@ -331,7 +331,7 @@ io_shell_build_window_packet(struct queue *q, const struct io_window *win)
  * See if we have one or more full packets, and process them.
  */
 static bool
-io_shell_service_push_data(struct queue *q, struct receiver *r)
+io_shell_service_push_data(struct endpoint *ep, struct queue *q, struct receiver *r)
 {
 	struct io_session_auth *auth = r->handle;
 
@@ -363,7 +363,7 @@ shell_service_receiver(struct receiver *next, struct io_session_auth *auth)
 }
 
 static void
-io_shell_service_get_data(struct queue *q, struct sender *s)
+io_shell_service_get_data(struct endpoint *ep, struct queue *q, struct sender *s)
 {
 	struct io_session_auth *auth = s->handle;
 	struct queue *dataq = &s->__queue;
@@ -380,7 +380,8 @@ io_shell_service_get_data(struct queue *q, struct sender *s)
 			/* Send the failure message just once, and go silent afterwards */
 			auth->state = SESSION_AUTH_3MONKEYS;
 
-			/* FIXME: we should be able to request a write_shutdown here. */
+			/* Flush out the above message, then close the connection. */
+			endpoint_shutdown_write(ep);
 			return;
 
 		default:

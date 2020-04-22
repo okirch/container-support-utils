@@ -29,7 +29,7 @@ test_client_timing_update(struct test_client_timing *t)
 }
 
 static void
-test_client_get_data(struct queue *q, struct sender *s)
+test_client_get_data(struct endpoint *ep, struct queue *q, struct sender *s)
 {
 	struct test_client_appdata *appdata = s->handle;
 	size_t send_sz;
@@ -62,7 +62,7 @@ test_client_sender(void *handle)
 }
 
 static bool
-test_client_push_data(struct queue *q, struct receiver *r)
+test_client_push_data(struct endpoint *ep, struct queue *q, struct receiver *r)
 {
 	struct test_client_appdata *appdata = r->handle;
 	size_t recv_sz;

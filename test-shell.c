@@ -257,7 +257,7 @@ struct echo_client_appdata {
 #define ECHO_CLIENT_COMMAND2	"V=Yes; echo \"$V$V$V\"\n"
 
 static void
-echo_client_get_data(struct queue *q, struct sender *s)
+echo_client_get_data(struct endpoint *ep, struct queue *q, struct sender *s)
 {
 	struct echo_client_appdata *appdata = s->handle;
 
@@ -282,7 +282,7 @@ echo_client_sender(void *handle)
 }
 
 static bool
-echo_client_push_data(struct queue *q, struct receiver *r)
+echo_client_push_data(struct endpoint *ep, struct queue *q, struct receiver *r)
 {
 	struct echo_client_appdata *appdata = r->handle;
 	unsigned int bytes;

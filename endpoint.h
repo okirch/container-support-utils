@@ -72,7 +72,7 @@ struct sender {
 	struct sender *	next;
 
 	void *		handle;
-	void		(*get_data)(struct queue *, struct sender *);
+	void		(*get_data)(struct endpoint *, struct queue *, struct sender *);
 
 	struct queue **	sendqp;
 	struct queue	__queue;
@@ -82,7 +82,7 @@ struct receiver {
 	struct receiver *next;
 
 	void *		handle;
-	bool		(*push_data)(struct queue *, struct receiver *);
+	bool		(*push_data)(struct endpoint *, struct queue *, struct receiver *);
 	void		(*push_event)(struct event *, struct receiver *);
 
 	struct queue *	recvq;
@@ -170,7 +170,7 @@ endpoint_data_source_callback(struct endpoint *ep)
 	struct sender *sender = ep->sender;
 
 	if (sender && sender->get_data)
-		sender->get_data(&ep->sendq, sender);
+		sender->get_data(ep, &ep->sendq, sender);
 }
 
 static inline void
@@ -179,7 +179,7 @@ endpoint_data_sink_callback(struct endpoint *ep)
 	struct receiver *receiver = ep->receiver;
 
 	if (receiver && receiver->push_data && ep->recvq) {
-		if (receiver->push_data(ep->recvq, receiver)) {
+		if (receiver->push_data(ep, ep->recvq, receiver)) {
 			endpoint_debug(ep, "receiver could not process all data");
 			ep->have_unconsumed_data = true;
 		}
