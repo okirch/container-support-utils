@@ -6,6 +6,7 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,12 +18,15 @@
 #include <fcntl.h>
 #include <pty.h>
 #include <errno.h>
+#include <sched.h>
 
 #include "shell.h"
 #include "buffer.h"
 #include "tracing.h"
 
 static struct console_slave *	processes;
+
+static int			shell_set_namespaces_from(int procfd);
 
 static const struct console_slave *
 process_exited(pid_t pid, int status, const struct rusage *rusage)
@@ -96,13 +100,16 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 		}
 #endif
 
-		/* TBD: set name spaces from procfd */
+		/* set name spaces from procfd */
+		if (procfd >= 0) {
+			if (shell_set_namespaces_from(procfd) < 0)
+				log_fatal("unable to set namespaces\n");
+		}
 
 		/* FIXME: close everything above fd 2 */
 
 		execv(cmd, argv);
-		fprintf(stderr, "unable to execute %s: %m\n", cmd);
-		exit(55);
+		log_fatal("unable to execute %s: %m\r\n", cmd);
 	}
 
 #ifdef TIOCTTY
@@ -152,6 +159,79 @@ shell_open_namespace_dir(pid_t container_pid, const char *command)
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	return fd;
+}
+
+static bool
+shell_is_namespace_member(int procfd, const char *name)
+{
+	char pathbuf[PATH_MAX];
+	struct stat stb1, stb2;
+
+	if (fstatat(procfd, name, &stb1, 0) < 0) {
+		log_error("Cannot stat namespace file %s: %m\n", name);
+		return false;
+	}
+
+	snprintf(pathbuf, sizeof(pathbuf), "/proc/self/ns/%s", name);
+	if (stat(pathbuf, &stb2) < 0) {
+		log_error("Cannot stat namespace file %s: %m\n", pathbuf);
+		return false;
+	}
+
+	return stb1.st_dev == stb2.st_dev && stb1.st_ino == stb2.st_ino;
+}
+
+int
+shell_set_namespaces_from(int procfd)
+{
+	struct nsname {
+		const char *	name;
+		int		id;
+		bool		join;
+	} nsnames[] = {
+		{ "cgroup", CLONE_NEWCGROUP },
+		{ "ipc",  CLONE_NEWIPC },
+		{ "mnt", CLONE_NEWNS },
+		{ "net", CLONE_NEWNET },
+		{ "pid", CLONE_NEWPID },
+		{ "user", CLONE_NEWUSER },
+		{ "uts", CLONE_NEWUTS },
+		{ NULL }
+	};
+	struct nsname *ns;
+
+	trace("child process joining namespaces of conainer\n");
+#if 0
+	unshare(CLONE_NEWNS);
+#endif
+
+	for (ns = nsnames; ns->name; ++ns)
+		ns->join = !shell_is_namespace_member(procfd, ns->name);
+
+	for (ns = nsnames; ns->name; ++ns) {
+		int fd;
+
+		if (!ns->join) {
+			trace("  %s: already a member\n", ns->name);
+			continue;
+		}
+
+		if ((fd = openat(procfd, ns->name, O_RDONLY)) < 0) {
+			log_error("Unable to open namespace %s: %m.\n", ns->name);
+			return -1;
+		}
+
+		if (setns(fd, ns->id) < 0) {
+			log_error("Unable to attach to namespace %s: %m.\n", ns->name);
+			close(fd);
+			return -1;
+		}
+
+		trace("  %s: OK\n", ns->name);
+		close(fd);
+	}
+
+	return 0;
 }
 
 int
