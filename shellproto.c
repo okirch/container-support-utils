@@ -25,11 +25,17 @@ struct packet_header {
 	uint16_t		len;
 };
 
-struct packet_window_size {
-	struct packet_header	hdr;
+struct payload_window_size {
 	uint32_t		rows;
 	uint32_t		cols;
 };
+
+struct packet_window_size {
+	struct packet_header	hdr;
+	struct payload_window_size payload;
+};
+
+static unsigned int HDRLEN = sizeof(struct packet_header);
 
 #define PACKET_HEADER_MAGIC	0x50feeb1e
 #define PACKET_MAX_DATA		1024
@@ -46,40 +52,39 @@ enum {
  * Process one or more incoming packets
  */
 static void
-__io_shell_process_packet(const struct packet_header *hdr, struct queue *q, struct receiver *next)
+__io_shell_process_data_packet(const struct packet_header *hdr, struct queue *q, struct receiver *next)
 {
-	void *buffer;
-	const void *p;
+	/* Skip past header */
+	queue_advance_head(q, HDRLEN);
 
-	buffer = alloca(hdr->len);
-	p = queue_peek(q, buffer, hdr->len);
-
-	if (hdr->type == PKT_TYPE_WINDOW
-	 && hdr->len == sizeof(struct packet_window_size) - sizeof(struct packet_header)) {
-		struct window {
-			uint32_t		rows;
-			uint32_t		cols;
-		} window;
-
-		memcpy(&window, p, hdr->len);
-		window.rows = ntohl(window.rows);
-		window.cols = ntohl(window.cols);
-		printf("window update <%u, %u>\n", window.rows, window.cols);
-		queue_advance_head(q, hdr->len);
-		return;
-	}
-
-	if (hdr->type != PKT_TYPE_DATA) {
-		fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
-		queue_advance_head(q, hdr->len);
-		return;
-	}
-
-	queue_append(next->recvq, p, hdr->len);
-	queue_advance_head(q, hdr->len);
-
+	/* Transfer data to upper layer queue and push it */
+	queue_transfer(next->recvq, q, hdr->len);
 	if (next->push_data)
 		next->push_data(next->recvq, next);
+}
+
+static void
+__io_shell_process_window_packet(const struct packet_header *hdr, struct queue *q, struct receiver *next)
+{
+	struct payload_window_size window;
+
+	/* Skip past header */
+	queue_advance_head(q, HDRLEN);
+
+	if (hdr->len != sizeof(struct payload_window_size)) {
+		fprintf(stderr, "Bad packet size %u in window packet\n", hdr->len);
+		queue_advance_head(q, hdr->len);
+		return;
+	}
+
+	queue_get(q, &window, hdr->len);
+
+	window.rows = ntohl(window.rows);
+	window.cols = ntohl(window.cols);
+
+	printf("window update <%u, %u>\n", window.rows, window.cols);
+	if (next->push_event)
+		next->push_event(io_forwarder_window_event(window.rows, window.cols), next);
 }
 
 /*
@@ -90,8 +95,7 @@ __io_shell_process_packet(const struct packet_header *hdr, struct queue *q, stru
 static bool
 io_shell_process_packets(struct queue *q, struct receiver *next)
 {
-	static unsigned int HDRLEN = sizeof(struct packet_header);
-	struct packet_header hdrbuf;
+	struct packet_header hdrbuf, *hdr;
 	const struct packet_header *p;
 
 	while (queue_available(q) >= HDRLEN) {
@@ -102,28 +106,38 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 		hdrbuf.magic = ntohl(hdrbuf.magic);
 		hdrbuf.type = ntohs(hdrbuf.type);
 		hdrbuf.len = ntohs(hdrbuf.len);
+		hdr = &hdrbuf;
 
 		//test_trace("packet 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
-		if (hdrbuf.magic != PACKET_HEADER_MAGIC
-		 || hdrbuf.type >= __PKT_TYPE_MAX) {
+		if (hdr->magic != PACKET_HEADER_MAGIC
+		 || hdr->type >= __PKT_TYPE_MAX) {
 			fprintf(stderr, "Bad packet header\n");
-			trace("packet magic 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
+			trace("packet magic 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
 			exit(1);
 			return false; /* error */
 		}
 
-		if (queue_available(q) < HDRLEN + hdrbuf.len)
+		if (queue_available(q) < HDRLEN + hdr->len)
 			return false;
 
-		if (queue_tailroom(next->recvq) < hdrbuf.len) {
-			trace("not enough room in next layer, leave incoming packet in packet queue\n");
-			return true;
+		switch (hdr->type) {
+		case PKT_TYPE_WINDOW:
+			__io_shell_process_window_packet(hdr, q, next);
+			break;
+
+		case PKT_TYPE_DATA:
+			if (queue_tailroom(next->recvq) < hdr->len) {
+				trace("not enough room in next layer, leave incoming packet in packet queue\n");
+				return true;
+			}
+			__io_shell_process_data_packet(hdr, q, next);
+			break;
+
+		default:
+			fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
+			queue_advance_head(q, hdr->len);
+			break;
 		}
-
-		/* Skip past header */
-		queue_advance_head(q, HDRLEN);
-
-		__io_shell_process_packet(&hdrbuf, q, next);
 	}
 
 	return false;
@@ -178,8 +192,8 @@ io_shell_build_window_packet(struct queue *q, const struct io_window *win)
 	pkt.hdr.magic = htonl(PACKET_HEADER_MAGIC);
 	pkt.hdr.type = htons(PKT_TYPE_WINDOW);
 	pkt.hdr.len = htons(sizeof(pkt) - sizeof(struct packet_header));
-	pkt.rows = htonl(win->rows);
-	pkt.cols = htonl(win->cols);
+	pkt.payload.rows = htonl(win->rows);
+	pkt.payload.cols = htonl(win->cols);
 
 	queue_append(q, &pkt, sizeof(pkt));
 
