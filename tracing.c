@@ -10,6 +10,10 @@
 #include <stdlib.h>
 #include <errno.h>
 
+/* For __get_logf() */
+#include <unistd.h>
+#include <fcntl.h>
+
 #include "endpoint.h"
 #include "tracing.h"
 
@@ -17,13 +21,25 @@ void		(*__tracing_hook)(const char *fmt, ...);
 
 static FILE *	logfile = NULL;
 
+static FILE *
+__get_logf(void)
+{
+	if (logfile == NULL) {
+		int fd = dup(2);
+
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
+		logfile = fdopen(fd, "w");
+	}
+	return logfile;
+}
+
 static void
 __trace_logfile(const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	vfprintf(logfile?: stderr, fmt, ap);
+	vfprintf(__get_logf(), fmt, ap);
 	va_end(ap);
 }
 
@@ -38,7 +54,7 @@ __log_prefix(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	vfprintf(logfile?: stderr, fmt, ap);
+	vfprintf(__get_logf(), fmt, ap);
 	va_end(ap);
 
 	errno = saved_errno;
@@ -51,7 +67,7 @@ log_warning(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Warning: ");
-	vfprintf(logfile?: stderr, fmt, ap);
+	vfprintf(__get_logf(), fmt, ap);
 	va_end(ap);
 }
 
@@ -62,7 +78,7 @@ log_error(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Error: ");
-	vfprintf(logfile?: stderr, fmt, ap);
+	vfprintf(__get_logf(), fmt, ap);
 	va_end(ap);
 }
 
@@ -73,7 +89,7 @@ log_fatal(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Fatal error: ");
-	vfprintf(logfile?: stderr, fmt, ap);
+	vfprintf(__get_logf(), fmt, ap);
 	va_end(ap);
 
 	exit(1);
@@ -114,7 +130,7 @@ void
 endpoint_error(const struct endpoint *ep, const char *fmt, ...)
 {
 	if (ep->debug) {
-		FILE *fp = logfile? : stderr;
+		FILE *fp = __get_logf();
 		va_list ap;
 		int n;
 
@@ -133,7 +149,7 @@ void
 endpoint_debug(const struct endpoint *ep, const char *fmt, ...)
 {
 	if (ep->debug) {
-		FILE *fp = logfile? : stderr;
+		FILE *fp = __get_logf();
 		va_list ap;
 		int n;
 
