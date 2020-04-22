@@ -71,42 +71,6 @@ endpoint_debug_name(const struct endpoint *ep)
 }
 
 void
-endpoint_error(const struct endpoint *ep, const char *fmt, ...)
-{
-	if (ep->debug) {
-		va_list ap;
-		int n;
-
-		va_start(ap, fmt);
-		fprintf(stderr, "ERROR on socket %s: ", endpoint_debug_name(ep));
-		fprintf(stderr, fmt, ap);
-		va_end(ap);
-
-		n = strlen(fmt);
-		if (n && fmt[n-1] != '\n')
-			fputs("\n", stderr);
-	}
-}
-
-void
-endpoint_debug(const struct endpoint *ep, const char *fmt, ...)
-{
-	if (ep->debug) {
-		va_list ap;
-		int n;
-
-		va_start(ap, fmt);
-		fprintf(stderr, "%-20s ", endpoint_debug_name(ep));
-		vfprintf(stderr, fmt, ap);
-		va_end(ap);
-
-		n = strlen(fmt);
-		if (n && fmt[n-1] != '\n')
-			fputs("\n", stderr);
-	}
-}
-
-void
 endpoint_free(struct endpoint *ep)
 {
 	if (ep->fd >= 0)
