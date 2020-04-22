@@ -12,6 +12,7 @@
 #include <sys/poll.h>
 #include <sys/time.h>
 #include "endpoint.h"
+#include "tracing.h"
 
 #define ENDPOINT_MAX	1024
 #define EVENT_MAX	16
@@ -98,7 +99,7 @@ io_timestamp_ms(void)
 	struct timeval tv;
 
 	if (gettimeofday(&tv, NULL) < 0) {
-		perror("gettimeofday");
+		log_error("gettimeofday: %m");
 		exit(66);
 	}
 	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -180,7 +181,7 @@ io_mainloop(long timeout)
 		}
 
 		if (poll(pfd, nfds, wait_ms) < 0 && errno != EINTR) {
-			perror("poll");
+			log_error("poll: %m");
 			return -1;
 		}
 

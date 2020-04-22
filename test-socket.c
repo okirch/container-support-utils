@@ -43,7 +43,7 @@ do_pipe_test(unsigned int time, bool random_send, bool random_recv)
 	test_client_appdata_init(&appdata, random_send, random_recv);
 
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
-		perror("socketpair");
+		log_error("socketpair: %m");
 		exit(66);
 	}
 
@@ -79,7 +79,7 @@ do_echo_test(unsigned int time, bool random_send, bool random_recv)
 	test_client_appdata_init(&appdata, random_send, random_recv);
 
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
-		perror("socketpair");
+		log_error("socketpair: %m");
 		exit(66);
 	}
 
@@ -115,7 +115,7 @@ do_hangup_test(unsigned int time, bool random_send, bool random_recv)
 	test_client_appdata_init(&appdata, random_send, random_recv);
 
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
-		perror("socketpair");
+		log_error("socketpair: %m");
 		exit(66);
 	}
 

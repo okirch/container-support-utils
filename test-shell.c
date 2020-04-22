@@ -113,7 +113,7 @@ do_common_test_setup(struct test_client_appdata *appdata, struct console_slave *
 	test_client_appdata_init(appdata, false, false);
 
 	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, pair) < 0) {
-		perror("socketpair");
+		log_error("socketpair: %m");
 		exit(66);
 	}
 
@@ -337,7 +337,7 @@ create_echo_client(struct echo_client_appdata *appdata, const char *name, const 
 	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 
 	if (connect(fd, (struct sockaddr *) svc_addr, sizeof(*svc_addr)) < 0 && errno != EINPROGRESS) {
-		perror("connect");
+		log_error("connect: %m");
 		return NULL;
 	}
 

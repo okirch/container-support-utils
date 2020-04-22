@@ -180,7 +180,7 @@ __endpoint_socket_send(struct endpoint *ep, const void *p, size_t len)
 	n = send(ep->fd, p, len, MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (n < 0) {
 		if (errno != EPIPE)
-			perror("socket send");
+			log_error("socket send: %m");
 	}
 
 	return n;
@@ -193,7 +193,7 @@ __endpoint_socket_recv(struct endpoint *ep, void *p, size_t len)
 
 	n = recv(ep->fd, p, len, MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (n < 0)
-		perror("socket recv");
+		log_error("socket recv: %m");
 
 	return n;
 }
@@ -202,7 +202,7 @@ static int
 __endpoint_socket_shutdown_write(struct endpoint *ep)
 {
 	if (shutdown(ep->fd, SHUT_WR) < 0) {
-		perror("shutdown");
+		log_error("shutdown: %m");
 		return -1;
 	}
 
@@ -228,7 +228,7 @@ endpoint_new_socket(int fd)
 
 	optlen = sizeof(size);
 	if (getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, &optlen) < 0) {
-		perror("getsockopt(SO_SNDBUF)");
+		log_error("getsockopt(SO_SNDBUF): %m");
 	} else {
 		assert(optlen == sizeof(size));
 		ep->send_size_hint = size;
@@ -258,7 +258,7 @@ __endpoint_listener_recv(struct endpoint *ep, void *p, size_t len)
 
 	fd = accept(ep->fd, NULL, NULL);
 	if (fd < 0) {
-		perror("accept");
+		log_error("accept: %m");
 		return 1;
 	}
 
@@ -323,7 +323,7 @@ __endpoint_pty_send(struct endpoint *ep, const void *p, size_t len)
 
 	n = write(ep->fd, p, len);
 	if (n < 0)
-		perror("pty send");
+		log_error("pty send: %m");
 
 	endpoint_debug(ep, "pty_send(%u bytes) = %d", len, n);
 	return n;
@@ -336,7 +336,7 @@ __endpoint_pty_recv(struct endpoint *ep, void *p, size_t len)
 
 	n = read(ep->fd, p, len);
 	if (n < 0)
-		perror("pty recv");
+		log_error("pty recv: %m");
 
 	endpoint_debug(ep, "pty_recv(%u bytes) = %d", len, n);
 	return n;

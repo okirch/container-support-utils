@@ -19,6 +19,7 @@
 
 #include "shell.h"
 #include "buffer.h"
+#include "tracing.h"
 
 static struct console_slave *	processes;
 
@@ -125,7 +126,7 @@ tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols)
 	struct winsize win;
 
 	if (ioctl(fd, TIOCGWINSZ, &win) < 0) {
-		perror("ioctl(TIOCGWINSZ)");
+		log_error("ioctl(TIOCGWINSZ): %m");
 		return -1;
 	}
 
@@ -144,7 +145,7 @@ tty_set_window_size(int fd, unsigned int rows, unsigned int cols)
 	win.ws_col = cols;
 
 	if (ioctl(fd, TIOCSWINSZ, &win) < 0) {
-		perror("ioctl(TIOCSWINSZ)");
+		log_error("ioctl(TIOCSWINSZ): %m");
 		return -1;
 	}
 
@@ -161,7 +162,7 @@ process_hangup(struct console_slave *process)
 
 	fd = open("/dev/null", O_RDWR);
 	if (fd < 0) {
-		perror("/dev/null");
+		log_error("/dev/null: %m");
 		exit(66);
 	}
 

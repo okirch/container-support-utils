@@ -318,24 +318,24 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 		sin = *listen_addr;
 
 		if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
-			perror("setsockopt(SO_REUSEADDR)");
+			log_error("setsockopt(SO_REUSEADDR): %m");
 	} else {
 		memset(&sin, 0, sizeof(sin));
 	}
 
 	if (bind(listen_fd, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-		perror("bind");
+		log_error("bind: %m");
 		return NULL;
 	}
 
 	alen = sizeof(sin);
 	if (getsockname(listen_fd, (struct sockaddr *) &sin, &alen) < 0) {
-		perror("bind");
+		log_error("bind: %m");
 		return NULL;
 	}
 
 	if (listen(listen_fd, 128) < 0) {
-		perror("listen");
+		log_error("listen: %m");
 		return NULL;
 	}
 
@@ -383,7 +383,7 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
 	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 
 	if (connect(fd, (struct sockaddr *) svc_addr, sizeof(*svc_addr)) < 0 && errno != EINPROGRESS) {
-		perror("connect");
+		log_error("connect: %m");
 		return NULL;
 	}
 

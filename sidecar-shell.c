@@ -92,6 +92,10 @@ main(int argc, char **argv)
 	sin.sin_port = htons(opt_port);
 
 	ep = io_shell_client_create(&sin, 0);
+	if (ep == NULL) {
+		log_error("Unable to create shell client\n");
+		return 1;
+	}
 
 	install_sigwinch_handler();
 
@@ -109,12 +113,12 @@ open_tty(struct termios *saved_termios)
 	struct termios tc;
 
 	if (!isatty(fd)) {
-		fprintf(stderr, "Standard input does not seem to be a tty.\n");
+		log_error("Standard input does not seem to be a tty.\n");
 		return -1;
 	}
 
 	if (tcgetattr(fd, &tc) < 0) {
-		perror("tcgetattr");
+		log_error("tcgetattr: %m");
 		return -1;
 	}
 
@@ -123,7 +127,7 @@ open_tty(struct termios *saved_termios)
 
 	cfmakeraw(&tc);
 	if (tcsetattr(fd, TCSANOW, &tc) < 0) {
-		perror("tcsetattr");
+		log_error("tcsetattr: %m");
 		return -1;
 	}
 
@@ -134,7 +138,7 @@ static void
 restore_tty(int fd, const struct termios *saved_termios)
 {
 	if (tcsetattr(fd, TCSANOW, saved_termios) < 0) {
-		perror("tcsetattr");
+		log_error("tcsetattr: %m");
 	}
 }
 
