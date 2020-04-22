@@ -133,6 +133,20 @@ queue_peek(const struct queue *q, void *p, size_t count)
 	return p;
 }
 
+const void *
+queue_get(struct queue *q, void *p, size_t count)
+{
+	queue_validate(q);
+	assert(q->size >= count);
+
+	if (count == 0)
+		return p;
+
+	/* slow path: linearize data */
+	__queue_peek(q, p, count);
+	return p;
+}
+
 void
 queue_advance_head(struct queue *q, size_t count)
 {

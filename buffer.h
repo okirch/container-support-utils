@@ -36,6 +36,7 @@ extern size_t		queue_available(const struct queue *);
 extern size_t		queue_tailroom(const struct queue *);
 extern bool		queue_full(const struct queue *);
 extern void		queue_append(struct queue *, const void *, size_t);
+extern const void *	queue_get(struct queue *q, void *p, size_t count);
 extern const void *	queue_peek(const struct queue *q, void *p, size_t count);
 extern void		queue_advance_head(struct queue *q, size_t count);
 extern void		queue_transfer(struct queue *dstq, struct queue *srcq, size_t count);
