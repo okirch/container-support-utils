@@ -91,7 +91,7 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(opt_port);
 
-	ep = io_shell_client_create(&sin, 0, opt_debug);
+	ep = io_shell_client_create(&sin, dup(tty_fd), opt_debug);
 	if (ep == NULL) {
 		log_error("Unable to create shell client\n");
 		return 1;
