@@ -167,7 +167,7 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
 		bytes = room - HDRLEN;
 
 	hdrbuf.magic = htonl(PACKET_HEADER_MAGIC);
-	hdrbuf.type = PKT_TYPE_DATA;
+	hdrbuf.type = htons(PKT_TYPE_DATA);
 	hdrbuf.len = htons(bytes);
 
 	queue_append(q, &hdrbuf, HDRLEN);
