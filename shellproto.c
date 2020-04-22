@@ -302,8 +302,8 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 	if (new_socket->debug) {
 		static unsigned int num_shell_sockets = 0;
 
-		endpoint_set_name(new_socket, "shell-sock", num_shell_sockets);
-		endpoint_set_name(fwd->pty, "shell-pty", num_shell_sockets);
+		endpoint_set_debug(new_socket, "shell-sock", num_shell_sockets);
+		endpoint_set_debug(fwd->pty, "shell-pty", num_shell_sockets);
 		num_shell_sockets += 1;
 	}
 }
@@ -377,7 +377,7 @@ __io_shell_client_sigwinch_callback(struct endpoint *tty, void *handle)
 }
 
 struct endpoint *
-io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
+io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, bool debug)
 {
 	struct endpoint *sock;
 	struct io_forwarder *fwd;
@@ -397,6 +397,14 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd)
 	/* Setup a forwarder between the tty and the socket we just
          * created. */
         fwd = io_forwarder_setup(sock, tty_fd, NULL);
+
+	if (debug) {
+		static unsigned int num_client_sockets = 0;
+
+		endpoint_set_debug(sock, "shellclnt-sock", num_client_sockets);
+		endpoint_set_debug(fwd->pty, "shellclnt-tty", num_client_sockets);
+		num_client_sockets += 1;
+	}
 
 	/* Install the shell protocol layer */
 	io_shell_service_install(sock);

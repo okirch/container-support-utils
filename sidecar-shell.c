@@ -14,6 +14,7 @@
 #include "shell.h"
 #include "tracing.h"
 
+static bool		opt_debug = false;
 static unsigned int	opt_port = 24666;
 
 static int		open_tty(struct termios *saved_termios);
@@ -37,7 +38,6 @@ usage(const char *argv0, int exitval)
 static bool
 parse_options(int argc, char **argv)
 {
-	bool opt_debug = false;
 	const char *opt_logfile = NULL;
 	int c;
 
@@ -91,7 +91,7 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(opt_port);
 
-	ep = io_shell_client_create(&sin, 0);
+	ep = io_shell_client_create(&sin, 0, opt_debug);
 	if (ep == NULL) {
 		log_error("Unable to create shell client\n");
 		return 1;
