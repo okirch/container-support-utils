@@ -144,6 +144,7 @@ queue_get(struct queue *q, void *p, size_t count)
 
 	/* slow path: linearize data */
 	__queue_peek(q, p, count);
+	queue_advance_head(q, count);
 	return p;
 }
 
