@@ -31,6 +31,7 @@ usage(const char *argv0, int exitval)
 		"  -p port  specify an alternate port to connect to\n"
 		"  -s secret\n"
 		"           specify the authentication nonce to present to the server\n"
+		"           Defaults to contents of SIDECAR_SECRET environment var.\n"
 		"  -d       enable debugging\n"
 		"  -L filename\n"
 		"           write all messages to logfile\n"
@@ -97,6 +98,9 @@ main(int argc, char **argv)
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(opt_port);
+
+	if (opt_secret == NULL)
+		opt_secret = getenv("SIDECAR_SECRET");
 
 	ep = io_shell_client_create(&sin, dup(tty_fd), opt_secret, opt_debug);
 	if (ep == NULL) {

@@ -29,6 +29,7 @@ usage(const char *argv0, int exitval)
 		"  -p port  specify an alternate port to connect to\n"
 		"  -s secret\n"
 		"           specify the authentication nonce to present to the server\n"
+		"           Defaults to contents of SIDECAR_SECRET environment var.\n"
 		"  -d       enable debugging\n"
 		"  -L filename\n"
 		"           write all messages to logfile\n"
@@ -110,6 +111,9 @@ my_session_settings(void)
 		.argv		= { "-sh", NULL },
 		.procfd		= -1,
         };
+
+	if (opt_secret == NULL)
+		opt_secret = getenv("SIDECAR_SECRET");
 
 	shell_settings.auth_secret = opt_secret;
 	return &shell_settings;
