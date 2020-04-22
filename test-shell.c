@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdint.h>
+#include <signal.h>
 #include <netinet/in.h>
 #include "shell.h"
 #include "endpoint.h"
@@ -83,25 +84,31 @@ shell_terminate_and_exit(struct console_slave *console)
 	}
 
 	status = process_killsignal(console);
-	if (status == 9 || status == 1) {
+
+	switch (status) {
+	case SIGHUP:
+	case SIGTERM:
+	case SIGKILL:
 		printf("Child process was killed by signal %d\n", status);
-	} else 
-	if (status > 0) {
-		fprintf(stderr, "cat command was killed by signal %d\n", status);
-		exit(99);
-	} else {
-		status = process_exitstatus(console);
-		if (status < 0) {
-			fprintf(stderr, "process_exitstatus() returns %d\n", status);
+		return;
+
+	default:
+		if (status > 0) {
+			fprintf(stderr, "cat command was killed by signal %d\n", status);
 			exit(99);
 		}
-		if (status != 0) {
-			fprintf(stderr, "cat exited with status %d\n", status);
-			exit(99);
-		}
-		printf("Child process exited with status %d\n", status);
 	}
 
+	status = process_exitstatus(console);
+	if (status < 0) {
+		fprintf(stderr, "process_exitstatus() returns %d\n", status);
+		exit(99);
+	}
+	if (status != 0) {
+		fprintf(stderr, "cat exited with status %d\n", status);
+		exit(99);
+	}
+	printf("Child process exited with status %d\n", status);
 }
 
 static void
