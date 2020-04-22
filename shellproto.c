@@ -137,7 +137,7 @@ io_shell_process_packets_preauth(struct queue *q, struct receiver *r)
 	struct io_session_auth *auth = r->handle;
 	const struct packet_header *hdr;
 
-	if ((hdr = __io_shell_peek_packet_header(q)) != NULL) {
+	while ((hdr = __io_shell_peek_packet_header(q)) != NULL) {
 		char secret_buf[128];
 
 		if (!__io_shell_check_packet_header(hdr)) {
@@ -150,7 +150,8 @@ io_shell_process_packets_preauth(struct queue *q, struct receiver *r)
 
 		if (hdr->type != PKT_TYPE_AUTH) {
 			log_error("Unexpected packet type %d in authentication state\n", hdr->type);
-			log_fatal("aborting.\n");
+			queue_advance_head(q, HDRLEN + hdr->len);
+			continue;
 		}
 
 		if (hdr->len >= sizeof(secret_buf)) {
@@ -167,9 +168,10 @@ io_shell_process_packets_preauth(struct queue *q, struct receiver *r)
 		if (!strcmp(auth->secret, secret_buf)) {
 			auth->state = SESSION_AUTH_AUTHENTICATED;
 			return true;
+		} else {
+			auth->state = SESSION_AUTH_FAILED;
+			break;
 		}
-
-		auth->state = SESSION_AUTH_FAILED;
 	}
 
 	return false;
@@ -366,9 +368,24 @@ io_shell_service_get_data(struct queue *q, struct sender *s)
 	struct io_session_auth *auth = s->handle;
 	struct queue *dataq = &s->__queue;
 
-	if (auth && io_session_auth_state(auth) == SESSION_AUTH_AUTHENTICATED) {
-		io_shell_build_banner_packet(q, "Authenticated. Welcome to the dark side.\r\n");
-		s->handle = NULL;
+	if (auth) {
+		switch (io_session_auth_state(auth)) {
+		case SESSION_AUTH_AUTHENTICATED:
+			io_shell_build_banner_packet(q, "Authenticated. Welcome to the dark side.\r\n");
+			s->handle = NULL;
+			break;
+
+		case SESSION_AUTH_FAILED:
+			io_shell_build_banner_packet(q, "Authentication failed.\r\n");
+			/* Send the failure message just once, and go silent afterwards */
+			auth->state = SESSION_AUTH_3MONKEYS;
+
+			/* FIXME: we should be able to request a write_shutdown here. */
+			return;
+
+		default:
+			return;
+		}
 	}
 
 	/* FIXME: we may have tried to send a window update but failed
