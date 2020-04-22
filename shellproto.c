@@ -41,6 +41,7 @@ static unsigned int HDRLEN = sizeof(struct packet_header);
 #define PACKET_MAX_DATA		1024
 
 enum {
+	PKT_TYPE_AUTH,
 	PKT_TYPE_DATA,
 	PKT_TYPE_WINDOW,
 	PKT_TYPE_SIGNAL,
@@ -174,6 +175,31 @@ io_shell_build_data_packet(struct queue *q, struct queue *dataq, struct sender *
 
 	/* Transfer bytes from raw dataq to shell layer packet queue */
 	queue_transfer(q, dataq, bytes);
+
+	return true;
+}
+
+static bool
+io_shell_build_auth_packet(struct queue *q, const char *secret)
+{
+	struct packet_header hdr;
+	unsigned int room, secret_len;
+
+	if (secret == NULL)
+		return true;
+
+	secret_len = strlen(secret);
+
+	room = queue_tailroom(q);
+	if (room < sizeof(hdr) + secret_len)
+		return false;
+
+	hdr.magic = htonl(PACKET_HEADER_MAGIC);
+	hdr.type = htons(PKT_TYPE_AUTH);
+	hdr.len = htons(secret_len);
+
+	queue_append(q, &hdr, sizeof(hdr));
+	queue_append(q, secret, secret_len);
 
 	return true;
 }
@@ -356,6 +382,15 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 }
 
 static void
+__io_shell_client_send_auth_secret(struct endpoint *socket, const char *secret)
+{
+	if (!io_shell_build_auth_packet(&socket->sendq, secret)) {
+		endpoint_error(socket, "could not push auth packet\n");
+		log_fatal("Authentication failed\n");
+	}
+}
+
+static void
 __io_shell_client_sigwinch_callback(struct endpoint *tty, void *handle)
 {
 	struct io_forwarder *fwd = handle;
@@ -370,14 +405,14 @@ __io_shell_client_sigwinch_callback(struct endpoint *tty, void *handle)
 		fwd->window.cols = cols;
 
 		if (!io_shell_build_window_packet(&fwd->socket->sendq, &fwd->window)) {
-			fprintf(stderr, "Could not push IO window update\n");
+			endpoint_error(fwd->socket, "could not push IO window update\n");
 			/* FIXME - see comment in io_shell_service_get_data() */
 		}
 	}
 }
 
 struct endpoint *
-io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, bool debug)
+io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, const char *secret, bool debug)
 {
 	struct endpoint *sock;
 	struct io_forwarder *fwd;
@@ -408,6 +443,9 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, bool debu
 
 	/* Install the shell protocol layer */
 	io_shell_service_install(sock);
+
+	/* If we've been given an auth secret, send it as first packet */
+	__io_shell_client_send_auth_secret(fwd->socket, secret);
 
 	endpoint_register_config_change_callback(fwd->pty, __io_shell_client_sigwinch_callback, fwd);
 

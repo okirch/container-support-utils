@@ -16,6 +16,7 @@
 
 static bool		opt_debug = false;
 static unsigned int	opt_port = 24666;
+static const char *	opt_secret = NULL;
 
 static int		open_tty(struct termios *saved_termios);
 static void		restore_tty(int fd, const struct termios *saved_termios);
@@ -26,8 +27,10 @@ usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
-		"%s [-d] [-L filename] [-p port]\n\n"
+		"%s [-d] [-L filename] [-p port] [-s secret]\n\n"
 		"  -p port  specify an alternate port to connect to\n"
+		"  -s secret\n"
+		"           specify the authentication nonce to present to the server\n"
 		"  -d       enable debugging\n"
 		"  -L filename\n"
 		"           write all messages to logfile\n"
@@ -41,7 +44,7 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt(argc, argv, "dL:p:")) != EOF) {
+	while ((c = getopt(argc, argv, "dL:p:s:")) != EOF) {
 		switch (c) {
 		case 'd':
 			opt_debug = true;
@@ -53,6 +56,10 @@ parse_options(int argc, char **argv)
 
 		case 'p':
 			opt_port = strtoul(optarg, NULL, 0);
+			break;
+
+		case 's':
+			opt_secret = optarg;
 			break;
 
 		default:
@@ -91,7 +98,7 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(opt_port);
 
-	ep = io_shell_client_create(&sin, dup(tty_fd), opt_debug);
+	ep = io_shell_client_create(&sin, dup(tty_fd), opt_secret, opt_debug);
 	if (ep == NULL) {
 		log_error("Unable to create shell client\n");
 		return 1;

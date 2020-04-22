@@ -69,7 +69,9 @@ struct io_shell_session_settings {
 extern struct endpoint *	io_shell_service_create_listener(const struct io_shell_session_settings *,
 						struct sockaddr_in *listen_addr);
 
-extern struct endpoint *	io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, bool debug);
+extern struct endpoint *	io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd,
+						const char *secret,
+						bool debug);
 
 
 #endif /* _SHELL_H */
