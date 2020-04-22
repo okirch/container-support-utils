@@ -135,7 +135,7 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 
 		default:
 			fprintf(stderr, "Ignoring type %d packet\n", hdr->type);
-			queue_advance_head(q, hdr->len);
+			queue_advance_head(q, HDRLEN + hdr->len);
 			break;
 		}
 	}
