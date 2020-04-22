@@ -24,6 +24,7 @@ struct console_slave {
 };
 
 extern struct console_slave *	start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode);
+extern int			shell_open_namespace_dir(pid_t container_pid, const char *command);
 
 extern void			process_hangup(struct console_slave *process);
 extern int			process_kill(struct console_slave *proc);

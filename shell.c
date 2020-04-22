@@ -123,6 +123,36 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 }
 
 int
+shell_open_namespace_dir(pid_t container_pid, const char *command)
+{
+	char procpath[PATH_MAX], cmdpath[PATH_MAX];
+	int fd;
+
+	snprintf(procpath, sizeof(procpath), "/proc/%d/ns", container_pid);
+	fd = open(procpath, O_RDONLY | O_DIRECTORY);
+	if (fd < 0) {
+		log_error("%s: %m\n", procpath);
+		return -1;
+	}
+
+	trace("successfully opened %s.\n", procpath);
+
+	if (command) {
+		snprintf(cmdpath, sizeof(cmdpath), "../root/%s", command);
+		if (faccessat(fd, cmdpath, X_OK, AT_SYMLINK_NOFOLLOW) < 0) {
+			log_error("unable to access %s in container %d: %m\n",
+					command, container_pid);
+			close(fd);
+			return -1 ;
+		}
+
+		trace("okay: container seems to have %s in its filesystem namespace.\n", command);
+	}
+
+	return fd;
+}
+
+int
 tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols)
 {
 	struct winsize win;

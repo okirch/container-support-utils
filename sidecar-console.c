@@ -17,6 +17,7 @@
 static bool		opt_debug = false;
 static unsigned int	opt_port = 24666;
 static const char *	opt_secret = NULL;
+static int		opt_container_pid = 0;
 
 static struct io_shell_session_settings *my_session_settings(void);
 
@@ -25,11 +26,13 @@ usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
-		"%s [-d] [-L filename] [-p port] [-s secret]\n\n"
+		"%s [-d] [-L filename] [-p port] [-s secret] [-C pid-of-container]\n\n"
 		"  -p port  specify an alternate port to connect to\n"
 		"  -s secret\n"
 		"           specify the authentication nonce to present to the server\n"
 		"           Defaults to contents of SIDECAR_SECRET environment var.\n"
+		"  -C pid-of-container\n"
+		"           Run the shell in the context of the specified container\n"
 		"  -d       enable debugging\n"
 		"  -L filename\n"
 		"           write all messages to logfile\n"
@@ -43,8 +46,12 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt(argc, argv, "dL:p:s:")) != EOF) {
+	while ((c = getopt(argc, argv, "dC:L:p:s:")) != EOF) {
 		switch (c) {
+		case 'C':
+			opt_container_pid = strtoul(optarg, NULL, 0);
+			break;
+
 		case 'd':
 			opt_debug = true;
 			break;
@@ -114,7 +121,12 @@ my_session_settings(void)
 
 	if (opt_secret == NULL)
 		opt_secret = getenv("SIDECAR_SECRET");
-
 	shell_settings.auth_secret = opt_secret;
+
+	if (opt_container_pid) {
+		shell_settings.procfd = shell_open_namespace_dir(opt_container_pid, shell_settings.command);
+		if (shell_settings.procfd < 0)
+			log_fatal("abort.\n");
+	}
 	return &shell_settings;
 }
