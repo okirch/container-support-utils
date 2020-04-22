@@ -4,6 +4,8 @@
  * PTY and shell session handling
  */
 
+#include <sys/types.h>
+#include <sys/ioctl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -115,6 +117,38 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 	processes = ret;
 
 	return ret;
+}
+
+int
+tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols)
+{
+	struct winsize win;
+
+	if (ioctl(fd, TIOCGWINSZ, &win) < 0) {
+		perror("ioctl(TIOCGWINSZ)");
+		return -1;
+	}
+
+	*rows = win.ws_row;
+	*cols = win.ws_col;
+	return 0;
+}
+
+int
+tty_set_window_size(int fd, unsigned int rows, unsigned int cols)
+{
+	struct winsize win;
+
+	memset(&win, 0, sizeof(win));
+	win.ws_row = rows;
+	win.ws_col = cols;
+
+	if (ioctl(fd, TIOCSWINSZ, &win) < 0) {
+		perror("ioctl(TIOCSWINSZ)");
+		return -1;
+	}
+
+	return 0;
 }
 
 void

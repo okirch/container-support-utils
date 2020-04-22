@@ -31,6 +31,9 @@ extern int			process_killsignal(const struct console_slave *proc);
 extern int			process_exitstatus(const struct console_slave *proc);
 extern void			process_free(struct console_slave *proc);
 
+extern int			tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols);
+extern int			tty_set_window_size(int fd, unsigned int rows, unsigned int cols);
+
 /*
  * Doesn't really belong here
  */

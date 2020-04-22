@@ -8,7 +8,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/socket.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
 #include <assert.h>
 #include <stdint.h>
@@ -341,18 +340,15 @@ static void
 __io_shell_client_sigwinch_callback(struct endpoint *tty, void *handle)
 {
 	struct io_forwarder *fwd = handle;
-	struct winsize win;
+	unsigned int rows, cols;
 
-	/* printf("%s(tty=%d)\n", __func__, tty->fd); */
-	if (ioctl(tty->fd, TIOCGWINSZ, &win) < 0) {
-		perror("ioctl(TIOCGWINSZ)");
+	if (tty_get_window_size(tty->fd, &rows, &cols) < 0)
 		return;
-	}
 
-	if (fwd->window.rows != win.ws_row
-	 || fwd->window.cols != win.ws_col) {
-		fwd->window.rows = win.ws_row;
-		fwd->window.cols = win.ws_col;
+	if (fwd->window.rows != rows
+	 || fwd->window.cols != cols) {
+		fwd->window.rows = rows;
+		fwd->window.cols = cols;
 
 		if (!io_shell_build_window_packet(&fwd->socket->sendq, &fwd->window)) {
 			fprintf(stderr, "Could not push IO window update\n");
