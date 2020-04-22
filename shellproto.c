@@ -89,6 +89,42 @@ __io_shell_process_window_packet(const struct packet_header *hdr, struct queue *
 }
 
 /*
+ * Get the header of the next packet from the queue
+ */
+static const struct packet_header *
+__io_shell_peek_packet_header(struct queue *q)
+{
+	static struct packet_header hdrbuf;
+	const struct packet_header *p;
+
+	if (queue_available(q) < HDRLEN)
+		return NULL;
+
+	p = queue_peek(q, &hdrbuf, HDRLEN);
+	if (p != &hdrbuf)
+		memcpy(&hdrbuf, p, HDRLEN);
+
+	hdrbuf.magic = ntohl(hdrbuf.magic);
+	hdrbuf.type = ntohs(hdrbuf.type);
+	hdrbuf.len = ntohs(hdrbuf.len);
+	return &hdrbuf;
+}
+
+static bool
+__io_shell_check_packet_header(const struct packet_header *hdr)
+{
+	//trace("packet 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
+	if (hdr->magic != PACKET_HEADER_MAGIC
+	 || hdr->type >= __PKT_TYPE_MAX) {
+		log_error("bad packet header\n");
+		log_error("packet magic 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
+		return false;
+	}
+
+	return true;
+}
+
+/*
  * Process packets that sit in our queue.
  * Returns true IFF there are remaining packets that we could not
  * process (eg because the next receiver's queue was already full).
@@ -96,26 +132,12 @@ __io_shell_process_window_packet(const struct packet_header *hdr, struct queue *
 static bool
 io_shell_process_packets(struct queue *q, struct receiver *next)
 {
-	struct packet_header hdrbuf, *hdr;
-	const struct packet_header *p;
+	const struct packet_header *hdr;
 
-	while (queue_available(q) >= HDRLEN) {
-		p = queue_peek(q, &hdrbuf, HDRLEN);
-		if (p != &hdrbuf)
-			memcpy(&hdrbuf, p, HDRLEN);
-
-		hdrbuf.magic = ntohl(hdrbuf.magic);
-		hdrbuf.type = ntohs(hdrbuf.type);
-		hdrbuf.len = ntohs(hdrbuf.len);
-		hdr = &hdrbuf;
-
-		//test_trace("packet 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
-		if (hdr->magic != PACKET_HEADER_MAGIC
-		 || hdr->type >= __PKT_TYPE_MAX) {
-			log_error("bad packet header\n");
-			log_error("packet magic 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
+	while ((hdr = __io_shell_peek_packet_header(q)) != NULL) {
+		if (!__io_shell_check_packet_header(hdr)) {
 			log_fatal("aborting.\n");
-			return false; /* error */
+			/* return error */
 		}
 
 		if (queue_available(q) < HDRLEN + hdr->len)
