@@ -26,6 +26,10 @@ static bool		__io_mainloop_config_changed = false;
 static const char *	io_event_ids[EVENT_MAX];
 static unsigned int	io_event_id_count;
 
+static void		pollinfo_print_before(unsigned int, struct endpoint **, struct pollfd *);
+static void		pollinfo_print_after(unsigned int, struct endpoint **, struct pollfd *);
+static void		pollinfo_print_failed(void);
+
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
 static void		io_display_sockets(const struct pollfd *pfd, unsigned int nfds);
@@ -156,11 +160,8 @@ io_mainloop(long timeout)
 				endpoint_data_sink_callback(ep);
 			}
 
-			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0) {
-				if (ep->debug)
-					endpoint_debug(ep, "poll.events %s", io_strpollevents(pfd[nfds].events));
+			if (endpoint_poll(ep, &pfd[nfds], ~0) > 0)
 				watching[nfds++] = ep;
-			}
 		}
 
 		__io_mainloop_config_changed = false;
@@ -180,10 +181,15 @@ io_mainloop(long timeout)
 			wait_ms = until - now;
 		}
 
+		pollinfo_print_before(nfds, watching, pfd);
+
 		if (poll(pfd, nfds, wait_ms) < 0 && errno != EINTR) {
+			pollinfo_print_failed();
 			log_error("poll: %m");
 			return -1;
 		}
+
+		pollinfo_print_after(nfds, watching, pfd);
 
 		/* For testing purposes only */
 		if (__io_mainloop_detect_stalls)
@@ -191,9 +197,6 @@ io_mainloop(long timeout)
 
 		for (i = 0; i < nfds; ++i) {
 			struct endpoint *ep = watching[i];
-
-			if (ep->debug)
-				endpoint_debug(ep, "poll.revents %s", io_strpollevents(pfd[i].revents));
 
 			if (pfd[i].revents == POLLHUP) {
 				endpoint_debug(ep, "hangup from client");
@@ -272,11 +275,6 @@ io_identify_event(unsigned int id)
 static const char *
 io_strpollevents(int ev)
 {
-	static char buffer[62];
-
-	if (ev == 0)
-		return " <NIL>";
-
 	if (ev == POLLHUP)
 		return "POLLHUP";
 	if (ev == POLLERR)
@@ -284,10 +282,18 @@ io_strpollevents(int ev)
 	if (ev == POLLNVAL)
 		return "POLLNVAL";
 
-	snprintf(buffer, sizeof(buffer), "%s%s",
-				(ev & POLLIN)? " POLLIN" : "",
-				(ev & POLLOUT)? " POLLOUT" : "");
-	return buffer;
+	switch (ev & (POLLIN|POLLOUT)) {
+	case 0:
+		return "";
+	case POLLIN:
+		return "IN";
+	case POLLOUT:
+		return "OUT";
+	case POLLIN|POLLOUT:
+		return "IN|OUT";
+	}
+
+	return "?";
 }
 
 static const char *
@@ -341,4 +347,83 @@ io_display_sockets(const struct pollfd *pfd, unsigned int nfds)
 		fprintf(stderr, "    sendq %s\n", io_strqueueinfo(&ep->sendq));
 		fprintf(stderr, "    recvq %s\n", io_strqueueinfo(ep->recvq));
 	}
+}
+
+static const char *
+__pollinfo_print(unsigned int nfds, struct endpoint **watching, struct pollfd *pfd, bool before)
+{
+	static char buffer[256];
+	unsigned int i, pos, last_pos, left;
+
+	last_pos = pos = 0;
+	memset(buffer, 0, sizeof(buffer));
+
+	for (i = 0; i < nfds; ++i) {
+		struct endpoint *ep = watching[i];
+		int events;
+		char info[64];
+
+		if (before)
+			events = pfd[i].events;
+		else
+			events = pfd[i].revents;
+
+		if (!ep->debug || !events)
+			continue;
+
+		snprintf(info, sizeof(info), "%s%s(%s)",
+				pos? ", " : "",
+				endpoint_debug_name(ep), io_strpollevents(events));
+
+		left = sizeof(buffer) - pos;
+		if (strlen(info) + 1 < left) {
+			strcpy(buffer + pos, info);
+			pos += strlen(info);
+		} else if (left >= 5) {
+			strcpy(buffer + pos, " ...");
+			break;
+		} else {
+			strcpy(buffer + last_pos, " ...");
+			break;
+		}
+	}
+
+	if (pos == 0)
+		return NULL;
+
+	buffer[pos] = '\0';
+	return buffer;
+}
+
+static bool	__pollinfo_printed;
+
+void
+pollinfo_print_before(unsigned int nfds, struct endpoint **watching, struct pollfd *pfd)
+{
+	const char *msg;
+
+	__pollinfo_printed = false;
+	if ((msg = __pollinfo_print(nfds, watching, pfd, true)) == NULL)
+		return;
+
+	trace("%-20s poll(%s) = ", "", msg);
+	__pollinfo_printed = true;
+}
+
+void
+pollinfo_print_after(unsigned int nfds, struct endpoint **watching, struct pollfd *pfd)
+{
+	const char *msg;
+
+	if (__pollinfo_printed) {
+		msg = __pollinfo_print(nfds, watching, pfd, false);
+		trace("%s\n", msg? : "timeout");
+	}
+}
+
+void
+pollinfo_print_failed(void)
+{
+	if (__pollinfo_printed)
+		trace("error");
 }
