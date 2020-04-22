@@ -64,6 +64,10 @@ struct endpoint_ops {
 	int		(*shutdown_write)(struct endpoint *);
 };
 
+struct event {
+	unsigned int	type;
+};
+
 struct sender {
 	struct sender *	next;
 
@@ -79,6 +83,7 @@ struct receiver {
 
 	void *		handle;
 	bool		(*push_data)(struct queue *, struct receiver *);
+	void		(*push_event)(struct event *, struct receiver *);
 
 	struct queue *	recvq;
 	struct queue	__queue;
