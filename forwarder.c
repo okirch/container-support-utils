@@ -74,7 +74,8 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 {
 	struct io_forwarder *fwd = handle;
 
-	trace("%s(%s)\n", __func__, endpoint_debug_name(ep));
+	endpoint_debug(ep, "%s()", __func__);
+
 	if (ep == fwd->socket) {
 		/* We received an EOF from the client.
 		 * We should now switch the pty master socket to sending a
@@ -82,22 +83,29 @@ io_forwarder_eof_callback(struct endpoint *ep, void *handle)
 		 * which we don't, for now.
 		 * Instead, just kill the child process.
 		 */
-		trace("=== Hanging up PTY master ===\n");
+		if (fwd->process) {
+			trace("=== Hanging up PTY master ===\n");
+			process_hangup(fwd->process);
+		} else {
+			trace("=== Hanging up TTY ===\n");
+			tty_redirect_null(fwd->pty->fd);
+		}
+
 		if (fwd->pty)
 			queue_destroy(&fwd->pty->sendq);
-		if (fwd->process)
-			process_hangup(fwd->process);
 	} else
 	if (ep == fwd->pty) {
 		/* We received a hangup from the pty slave.
 		 */
-		trace("=== Hanging up PTY master ===\n");
+		if (fwd->process) {
+			trace("=== Hanging up PTY master ===\n");
+			process_hangup(fwd->process);
+		}
+
 		if (fwd->pty) {
 			queue_destroy(&fwd->pty->sendq);
 			endpoint_shutdown_write(fwd->pty);
 		}
-		if (fwd->process)
-			process_hangup(fwd->process);
 
 		/* Pretend that the socket has received an
 		 * EOF from the peer. This is to make sure
@@ -123,7 +131,7 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 		trace("=== Hangup from client ===\n");
 		fwd->socket = NULL;
 	} else if (fwd->pty == ep) {
-		trace("=== Hangup on PTY ===\n");
+		trace("=== Hangup on tty ===\n");
 		fwd->pty = NULL;
 	}
 
