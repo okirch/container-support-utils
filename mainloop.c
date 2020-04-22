@@ -14,12 +14,16 @@
 #include "endpoint.h"
 
 #define ENDPOINT_MAX	1024
+#define EVENT_MAX	16
 
 static struct endpoint *io_endpoints[ENDPOINT_MAX];
 static unsigned int	io_endpoint_count;
 static bool		__io_mainloop_exit_next = false;
 static bool		__io_mainloop_detect_stalls = false;
 static bool		__io_mainloop_config_changed = false;
+
+static const char *	io_event_ids[EVENT_MAX];
+static unsigned int	io_event_id_count;
 
 static const char *	io_strpollevents(int);
 static void		io_stall_detect(unsigned long ts, const struct pollfd *pfd, unsigned int nfds);
@@ -241,6 +245,27 @@ io_mainloop(long timeout)
 	}
 
 	return 0;
+}
+
+unsigned int
+io_register_event_type(const char *name)
+{
+	unsigned int id;
+
+	assert(io_event_id_count < EVENT_MAX);
+
+	id = io_event_id_count++;
+	io_event_ids[id] = name;
+	return id;
+}
+
+const char *
+io_identify_event(unsigned int id)
+{
+	if (id >= io_event_id_count)
+		return "UNKNOWN";
+
+	return io_event_ids[id];
 }
 
 static const char *

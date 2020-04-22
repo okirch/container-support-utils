@@ -128,6 +128,7 @@ extern void		io_mainloop_detect_stalls(void);
 extern void		io_mainloop_config_changed(void);
 extern void		io_close_all(void);
 extern unsigned long	io_timestamp_ms(void);
+extern unsigned int	io_register_event_type(const char *);
 
 static inline size_t
 endpoint_send_size_hint(const struct endpoint *ep)
