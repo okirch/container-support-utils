@@ -16,6 +16,7 @@ struct console_slave {
 	int		master_fd;
 	char *		tty_name;
 	pid_t		child_pid;
+	pid_t		child_pgrp;
 
 	struct console_slave *next;
 	int		exit_status;
@@ -33,6 +34,7 @@ extern void			process_free(struct console_slave *proc);
 
 extern int			tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols);
 extern int			tty_set_window_size(int fd, unsigned int rows, unsigned int cols);
+extern int			tty_redirect_null(int tty_fd);
 
 /*
  * Doesn't really belong here

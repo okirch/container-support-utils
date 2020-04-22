@@ -16,6 +16,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <pty.h>
+#include <errno.h>
 
 #include "shell.h"
 #include "buffer.h"
@@ -113,6 +114,7 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 	ret->master_fd = mfd;
 	ret->tty_name = strdup(slave_name);
 	ret->child_pid = pid;
+	ret->child_pgrp = pid;	 /* child_pid gets cleared when the child exits; child_pgrp does not */
 
 	ret->next = processes;
 	processes = ret;
@@ -152,21 +154,35 @@ tty_set_window_size(int fd, unsigned int rows, unsigned int cols)
 	return 0;
 }
 
-void
-process_hangup(struct console_slave *process)
+int
+tty_redirect_null(int tty_fd)
 {
 	int fd;
-
-	if (process->master_fd < 0)
-		return;
 
 	fd = open("/dev/null", O_RDWR);
 	if (fd < 0) {
 		log_error("/dev/null: %m");
-		exit(66);
+		return -1;
 	}
 
-	dup2(fd, process->master_fd);
+	dup2(fd, tty_fd);
+	close(fd);
+	return 0;
+}
+
+void
+process_hangup(struct console_slave *process)
+{
+	trace("%s(pgrp=%d, fd=%d)\n", __func__, process->child_pgrp, process->master_fd);
+	/* FIXME: send a signal to the process group */
+	if (process->child_pgrp) {
+		if (kill(-process->child_pgrp, SIGTERM) < 0 && errno != ESRCH)
+			log_error("%s: cannot send SIGTERM to pgrp %d: %m\n", __func__, process->child_pgrp);
+	}
+
+	if (process->master_fd >= 0
+	 && tty_redirect_null(process->master_fd))
+		log_fatal("%s: cannot redirect PTY master fd\n", __func__);
 }
 
 static int
