@@ -111,9 +111,9 @@ io_shell_process_packets(struct queue *q, struct receiver *next)
 		//test_trace("packet 0x%x type %d len %d\n", hdrbuf.magic, hdrbuf.type, hdrbuf.len);
 		if (hdr->magic != PACKET_HEADER_MAGIC
 		 || hdr->type >= __PKT_TYPE_MAX) {
-			fprintf(stderr, "Bad packet header\n");
-			trace("packet magic 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
-			exit(1);
+			log_error("bad packet header\n");
+			log_error("packet magic 0x%x type %d len %d\n", hdr->magic, hdr->type, hdr->len);
+			log_fatal("aborting.\n");
 			return false; /* error */
 		}
 
