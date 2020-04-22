@@ -20,16 +20,42 @@
 
 #include <fcntl.h>
 
+static int		window_change_event_id = -1;
+
+struct pty_window_event {
+	struct event		base;
+	unsigned int		rows;
+	unsigned int		cols;
+};
+
 /*
  * Passthru senders and receivers
  */
+static void
+pty_push_event(struct event *ev, struct receiver *r)
+{
+	struct endpoint *pty = r->handle;
+
+	if (ev->type == window_change_event_id) {
+		struct pty_window_event *wev = (struct pty_window_event *) ev;
+
+		trace("%s set window size %ux%u\n",
+				endpoint_debug_name(pty), wev->rows, wev->cols);
+		tty_set_window_size(pty->fd, wev->rows, wev->cols);
+	} else {
+		trace("%s unknown event %d\n", endpoint_debug_name(pty), ev->type);
+	}
+}
+
 static struct receiver *
 pty_receiver(struct endpoint *pty)
 {
 	struct receiver *r;
 
 	r = calloc(1, sizeof(*r));
+	r->handle = pty;
 	r->recvq = &pty->sendq;
+	r->push_event = pty_push_event;
 	return r;
 }
 
@@ -117,6 +143,24 @@ io_forwarder_close_callback(struct endpoint *ep, void *handle)
 		}
 		free(fwd);
 	}
+}
+
+/*
+ * Window size events
+ */
+struct event *
+io_forwarder_window_event(unsigned int rows, unsigned int cols)
+{
+	static struct pty_window_event event;
+
+	if (window_change_event_id < 0)
+		window_change_event_id = io_register_event_type("pty-window-change");
+
+	event.base.type = window_change_event_id;
+	event.rows = rows;
+	event.cols = cols;
+
+	return (struct event *) &event;
 }
 
 struct io_forwarder *
