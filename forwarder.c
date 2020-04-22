@@ -24,22 +24,22 @@
  * Passthru senders and receivers
  */
 static struct receiver *
-passthru_receiver(struct queue *q)
+pty_receiver(struct endpoint *pty)
 {
 	struct receiver *r;
 
 	r = calloc(1, sizeof(*r));
-	r->recvq = q;
+	r->recvq = &pty->sendq;
 	return r;
 }
 
 static struct sender *
-passthru_sender(struct queue **qp)
+pty_sender(struct endpoint *pty)
 {
 	struct sender *s;
 
 	s = calloc(1, sizeof(*s));
-	s->sendqp = qp;
+	s->sendqp = &pty->recvq;
 	return s;
 }
 
@@ -133,8 +133,8 @@ io_forwarder_setup(struct endpoint *socket, int tty_fd, struct console_slave *pr
 	endpoint_register_close_callback(fwd->pty, io_forwarder_close_callback, fwd);
 
 	endpoint_set_upper_layer(socket,
-			passthru_sender(&fwd->pty->recvq),
-			passthru_receiver(&fwd->pty->sendq));
+			pty_sender(fwd->pty),
+			pty_receiver(fwd->pty));
 
 	endpoint_register_eof_callback(socket, io_forwarder_eof_callback, fwd);
 	endpoint_register_close_callback(socket, io_forwarder_close_callback, fwd);
