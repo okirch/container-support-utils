@@ -451,6 +451,8 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 	struct io_forwarder *fwd;
 	struct console_slave *shell;
 
+	fcntl(new_socket->fd, F_SETFD, FD_CLOEXEC);
+
 	if (settings == NULL)
 		settings = &default_shell_settings;
 
@@ -476,6 +478,7 @@ io_shell_service_create_listener(const struct io_shell_session_settings *setting
 	int listen_fd;
 
 	listen_fd = socket(PF_INET, SOCK_STREAM, 0);
+	fcntl(listen_fd, F_SETFD, FD_CLOEXEC);
 
 	if (listen_addr && listen_addr->sin_family == AF_INET) {
 		int one = 1;
@@ -564,6 +567,7 @@ io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd, const cha
 	int fd;
 
 	fd = socket(PF_INET, SOCK_STREAM, 0);
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 

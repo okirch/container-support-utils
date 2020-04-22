@@ -149,6 +149,8 @@ shell_open_namespace_dir(pid_t container_pid, const char *command)
 		trace("okay: container seems to have %s in its filesystem namespace.\n", command);
 	}
 
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
+
 	return fd;
 }
 
