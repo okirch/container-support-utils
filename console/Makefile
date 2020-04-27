@@ -36,6 +36,10 @@ clean:
 	rm -f *.o *.a
 
 install: $(CONSOLE) $(CLIENT)
+	@case $(DESTDIR) in \
+	""|/*) ;; \
+	*) echo "DESTDIR is a relative path, no workie" >&2; exit 2;; \
+	esac
 	install -m 755 -d $(DESTDIR)$(BINDIR)
 	install -m 555 $(CONSOLE) $(DESTDIR)$(BINDIR)
 	install -m 555 $(CLIENT) $(DESTDIR)$(BINDIR)
