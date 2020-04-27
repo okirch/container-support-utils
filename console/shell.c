@@ -117,6 +117,8 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 		ioctl(mfd, TIOCTTY, 1);
 #endif
 
+	fcntl(mfd, F_SETFD, FD_CLOEXEC);
+
 	ret = calloc(1, sizeof(*ret));
 	ret->master_fd = mfd;
 	ret->tty_name = strdup(slave_name);
