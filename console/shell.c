@@ -233,6 +233,7 @@ shell_set_namespaces_from(int procfd)
 		close(fd);
 	}
 
+	chdir("/");
 	return 0;
 }
 
