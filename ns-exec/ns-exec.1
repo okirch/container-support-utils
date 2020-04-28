@@ -37,6 +37,18 @@ will execute
 .BI \-\-container " container-id\fR,\fP " \-C " container-id
 Identify the container in which to execute the shell process.
 .TP
+.BI \-\-shell " shell-path\fR,\fP " \-S " shell-path
+Specify the path to an alternative shell binary. This can be useful
+if the target container does not have /bin/bash (or possibly even
+dynamic libraries). In this case, you could install a statically
+linked shell binary such as busybox in your calling context, and
+invoke
+.BR "ns-exec --shell /usr/bin/busybox-static" .
+.B ns-exec
+will then try to execute the busybox image inside the target
+container (using
+.BR execveat (2)).
+.TP
 .BI \-\-mount " image:mountpoint\fR,\fP " \-M " image:mountpoint
 Future extension; not yet implemented. Intended to provide additional
 diagnostic tooling inside the container to be inspected.

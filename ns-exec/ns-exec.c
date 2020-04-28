@@ -22,6 +22,7 @@
 static bool		opt_debug = false;
 static const char *	opt_container_id = NULL;
 static const char *	opt_mount = NULL;
+static const char *	opt_shell = NULL;
 static bool		window_size_changed;
 
 static struct option	long_options[] = {
@@ -29,6 +30,7 @@ static struct option	long_options[] = {
 	{ "debug",		no_argument,		NULL,	'd' },
 	{ "container",		required_argument,	NULL,	'C' },
 	{ "logfile",		required_argument,	NULL,	'L' },
+	{ "shell",		required_argument,	NULL,	'S' },
 	{ "mount",		required_argument,	NULL,	'M' },
 	{ NULL }
 };
@@ -51,6 +53,11 @@ usage(const char *argv0, int exitval)
 		"  -logfile filename\n"
 		"           write all messages to logfile\n"
 		"\n"
+		"  -S shell-binary\n"
+		"  --shell shell-binary\n"
+		"           Specify a different shell binary.\n"
+		"           The default shell is /bin/bash.\n"
+		"\n"
 		"  -M image:mountpoint\n"
 		"  --mount image:mountpoint\n"
 		"           loop mount the specified image inside the container at mountpoint.\n"
@@ -71,7 +78,7 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt_long(argc, argv, "hdC:L:M:", long_options, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "hdC:L:M:S:", long_options, NULL)) != EOF) {
 		switch (c) {
 		case 'C':
 			opt_container_id = optarg;
@@ -90,6 +97,10 @@ parse_options(int argc, char **argv)
 
 		case 'M':
 			opt_mount = optarg;
+			break;
+
+		case 'S':
+			opt_shell = optarg;
 			break;
 
 		default:
@@ -312,6 +323,9 @@ run_shell(const char *container_id)
 	struct termios terminal_settings;
 	struct console_slave *console;
 	int tty_fd;
+
+	if (opt_shell)
+		shell_settings.command = opt_shell;
 
 	if (container_id != 0) {
 		struct container *container;
