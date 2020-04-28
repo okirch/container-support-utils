@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <assert.h>
 #include <termios.h>
 #include <signal.h>
@@ -23,22 +24,44 @@ static const char *	opt_container_id = NULL;
 static const char *	opt_mount = NULL;
 static bool		window_size_changed;
 
+static struct option	long_options[] = {
+	{ "help",		no_argument,		NULL,	'h' },
+	{ "debug",		no_argument,		NULL,	'd' },
+	{ "container",		required_argument,	NULL,	'C' },
+	{ "logfile",		required_argument,	NULL,	'L' },
+	{ "mount",		required_argument,	NULL,	'M' },
+	{ NULL }
+};
+
 static void
 usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
-		"%s [-d] [-L filename] [-C pid-of-container] [-M image:mountpoint]\n\n"
-		"  -C pid-of-container\n"
-		"           Run the shell in the context of the specified container\n"
-		"  -d       enable debugging\n"
+		"%s ... options\n"
+		"  -C container-id\n"
+		"  --container container-id\n"
+		"           Run the shell in the context of the specified container.\n"
+		"           The id can be a PID, or container's nodename.\n"
+		"\n"
+		"  -d, --debug\n"
+		"           enable debugging\n"
+		"\n"
 		"  -L filename\n"
+		"  -logfile filename\n"
 		"           write all messages to logfile\n"
+		"\n"
 		"  -M image:mountpoint\n"
+		"  --mount image:mountpoint\n"
 		"           loop mount the specified image inside the container at mountpoint.\n"
 		"           The destination mount point must exist.\n"
 		"           This is not implemented yet.\n"
-		, argv0);
+		"\n"
+		"  -h, --help\n"
+		"           display this message.\n"
+		"\n"
+		"If no -C option is specified, %s will list all containers visible in the current context.\n"
+		, argv0, argv0);
 	exit(exitval);
 }
 
@@ -48,11 +71,14 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt(argc, argv, "dC:L:M:")) != EOF) {
+	while ((c = getopt_long(argc, argv, "hdC:L:M:", long_options, NULL)) != EOF) {
 		switch (c) {
 		case 'C':
 			opt_container_id = optarg;
 			break;
+
+		case 'h':
+			usage(argv[0], 0);
 
 		case 'd':
 			opt_debug = true;
