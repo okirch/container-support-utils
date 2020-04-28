@@ -51,7 +51,7 @@ create_cat_service(int sockfd)
 	/* The true argument changes the slave tty to raw mode.
 	 * In particular, this will turn echoing off, which would
 	 * otherwise confuse our testing. */
-	console = start_shell("/usr/bin/cat", argv, -1, true);
+	console = start_shell("/usr/bin/cat", argv, NULL, true);
 
 	/* The first of the two sockets is the echo socket.
 	 * Its recvq is also its sendq. */

@@ -12,6 +12,8 @@
 
 #include "endpoint.h"
 
+struct container;
+
 struct console_slave {
 	int		master_fd;
 	char *		tty_name;
@@ -23,7 +25,7 @@ struct console_slave {
 	struct rusage	rusage;
 };
 
-extern struct console_slave *	start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode);
+extern struct console_slave *	start_shell(const char *cmd, char * const * argv, struct container *container, bool raw_mode);
 
 extern void			process_hangup(struct console_slave *process);
 extern int			process_kill(struct console_slave *proc);
@@ -50,7 +52,7 @@ struct io_shell_session_settings {
 
 	const char *		auth_secret;
 
-	int			procfd;
+	struct container *	container;
 };
 
 extern struct endpoint *	io_shell_service_create_listener(const struct io_shell_session_settings *,

@@ -1,7 +1,7 @@
 /*
  * container.c
  *
- * -
+ * Encapsulate container namespace
  */
 
 #include <sys/types.h>
@@ -23,39 +23,49 @@
 #include "container.h"
 #include "tracing.h"
 
-
-
-
-int
-shell_open_namespace_dir(pid_t container_pid, const char *command)
+struct container *
+container_open(pid_t container_pid)
 {
-	char procpath[PATH_MAX], cmdpath[PATH_MAX];
+	char procpath[PATH_MAX];
+	struct container *con;
 	int fd;
 
 	snprintf(procpath, sizeof(procpath), "/proc/%d/ns", container_pid);
 	fd = open(procpath, O_RDONLY | O_DIRECTORY);
 	if (fd < 0) {
 		log_error("%s: %m\n", procpath);
-		return -1;
-	}
-
-	trace("successfully opened %s.\n", procpath);
-
-	if (command) {
-		snprintf(cmdpath, sizeof(cmdpath), "../root/%s", command);
-		if (faccessat(fd, cmdpath, X_OK, AT_SYMLINK_NOFOLLOW) < 0) {
-			log_error("unable to access %s in container %d: %m\n",
-					command, container_pid);
-			close(fd);
-			return -1 ;
-		}
-
-		trace("okay: container seems to have %s in its filesystem namespace.\n", command);
+		return NULL;
 	}
 
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
 
-	return fd;
+	trace("successfully opened %s.\n", procpath);
+
+	con = calloc(1, sizeof(*con));
+	con->pid = container_pid;
+	con->procfd = fd;
+
+	return con;
+}
+
+
+bool
+container_has_command(const struct container *con, const char *command)
+{
+	char cmdpath[PATH_MAX];
+
+	if (command == NULL)
+		return true;
+
+	snprintf(cmdpath, sizeof(cmdpath), "../root/%s", command);
+	if (faccessat(con->procfd, cmdpath, X_OK, AT_SYMLINK_NOFOLLOW) < 0) {
+		log_error("unable to access %s in container %d: %m\n",
+				command, con->pid);
+		return false;
+	}
+
+	trace("okay: container seems to have %s in its filesystem namespace.\n", command);
+	return true;
 }
 
 static bool
@@ -79,7 +89,7 @@ shell_is_namespace_member(int procfd, const char *name)
 }
 
 int
-shell_set_namespaces_from(int procfd)
+container_attach(const struct container *con)
 {
 	struct nsname {
 		const char *	name;
@@ -103,7 +113,7 @@ shell_set_namespaces_from(int procfd)
 #endif
 
 	for (ns = nsnames; ns->name; ++ns)
-		ns->join = !shell_is_namespace_member(procfd, ns->name);
+		ns->join = !shell_is_namespace_member(con->procfd, ns->name);
 
 	for (ns = nsnames; ns->name; ++ns) {
 		int fd;
@@ -113,7 +123,7 @@ shell_set_namespaces_from(int procfd)
 			continue;
 		}
 
-		if ((fd = openat(procfd, ns->name, O_RDONLY)) < 0) {
+		if ((fd = openat(con->procfd, ns->name, O_RDONLY)) < 0) {
 			log_error("Unable to open namespace %s: %m.\n", ns->name);
 			return -1;
 		}

@@ -446,7 +446,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 	static struct io_shell_session_settings default_shell_settings = {
 		.command	= "/bin/bash",
 		.argv		= { "-sh", NULL },
-		.procfd		= -1,
+		.container	= NULL,
 	};
 	const struct io_shell_session_settings *settings = handle;
 	struct io_forwarder *fwd;
@@ -457,7 +457,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 	if (settings == NULL)
 		settings = &default_shell_settings;
 
-	shell = start_shell(settings->command, settings->argv, settings->procfd, false);
+	shell = start_shell(settings->command, settings->argv, settings->container, false);
 
 	fwd = io_shell_service_create(new_socket, shell, settings->auth_secret);
 

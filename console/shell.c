@@ -75,7 +75,7 @@ install_sigchild_handler(void)
 }
 
 struct console_slave *
-start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
+start_shell(const char *cmd, char * const * argv, struct container *container, bool raw_mode)
 {
 	struct console_slave *ret;
 	char slave_name[PATH_MAX];
@@ -99,11 +99,9 @@ start_shell(const char *cmd, char * const * argv, int procfd, bool raw_mode)
 		}
 #endif
 
-		/* set name spaces from procfd */
-		if (procfd >= 0) {
-			if (shell_set_namespaces_from(procfd) < 0)
-				log_fatal("unable to set namespaces\n");
-		}
+		/* attach to container's namespaces */
+		if (container && container_attach(container) < 0)
+			log_fatal("unable to attach to container namespaces\n");
 
 		/* FIXME: close everything above fd 2 */
 

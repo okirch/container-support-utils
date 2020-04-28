@@ -117,7 +117,7 @@ my_session_settings(void)
 	static struct io_shell_session_settings shell_settings = {
 		.command	= "/bin/bash",
 		.argv		= { "-sh", NULL },
-		.procfd		= -1,
+		.container	= NULL,
         };
 
 	if (opt_secret == NULL)
@@ -125,9 +125,16 @@ my_session_settings(void)
 	shell_settings.auth_secret = opt_secret;
 
 	if (opt_container_pid) {
-		shell_settings.procfd = shell_open_namespace_dir(opt_container_pid, shell_settings.command);
-		if (shell_settings.procfd < 0)
+		struct container *con;
+
+		con = container_open(opt_container_pid);
+		if (con == NULL)
 			log_fatal("abort.\n");
+
+		if (!container_has_command(con, shell_settings.command))
+			log_fatal("giving up.\n");
+
+		shell_settings.container = con;
 	}
 	return &shell_settings;
 }

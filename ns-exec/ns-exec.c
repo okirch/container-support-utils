@@ -15,6 +15,7 @@
 #include <errno.h>
 
 #include "shell.h"
+#include "container.h"
 #include "tracing.h"
 
 static bool		opt_debug = false;
@@ -269,11 +270,12 @@ run_shell(pid_t pid)
 	struct termios terminal_settings;
 	char *argv[] = { "-sh", NULL };
 	struct console_slave *console;
-	int proc_fd = -1, tty_fd;
+	struct container *container = NULL;
+	int tty_fd;
 
 	if (pid != 0) {
-		proc_fd = shell_open_namespace_dir(pid, "/bin/bash");
-		if (proc_fd < 0)
+		container = container_open(pid);
+		if (container == NULL || !container_has_command(container, "/bin/bash"))
 			log_fatal("could not access container namespace dir\n");
 	}
 
@@ -291,7 +293,7 @@ run_shell(pid_t pid)
 	unsetenv("HOSTNAME");
 	unsetenv("HOST");
 
-	console = start_shell("/bin/bash", argv, proc_fd, false);
+	console = start_shell("/bin/bash", argv, container, false);
 	if (console == NULL)
 		log_fatal("Unable to start shell");
 
