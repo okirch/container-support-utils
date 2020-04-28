@@ -106,7 +106,7 @@ container_attach(const struct container *con)
 	struct nsname {
 		const char *	name;
 		int		id;
-		bool		join;
+		int		fd;
 	} nsnames[] = {
 		{ "cgroup", CLONE_NEWCGROUP },
 		{ "ipc",  CLONE_NEWIPC },
@@ -118,6 +118,7 @@ container_attach(const struct container *con)
 		{ NULL }
 	};
 	struct nsname *ns;
+	int rv = -1;
 
 	trace("child process joining namespaces of container\n");
 #if 0
@@ -125,33 +126,42 @@ container_attach(const struct container *con)
 #endif
 
 	for (ns = nsnames; ns->name; ++ns)
-		ns->join = !shell_is_namespace_member(con->procfd, ns->name);
+		ns->fd = -1;
+
+	for (ns = nsnames; ns->name; ++ns) {
+		if (shell_is_namespace_member(con->procfd, ns->name)) {
+			/* no need to join, we're already in the same club */
+		} else if ((ns->fd = openat(con->procfd, ns->name, O_RDONLY)) < 0) {
+			log_error("Unable to open namespace %s: %m.\n", ns->name);
+			goto out;
+		}
+	}
 
 	for (ns = nsnames; ns->name; ++ns) {
 		int fd;
 
-		if (!ns->join) {
+		if (ns->fd < 0) {
 			trace("  %s: already a member\n", ns->name);
 			continue;
 		}
 
-		if ((fd = openat(con->procfd, ns->name, O_RDONLY)) < 0) {
-			log_error("Unable to open namespace %s: %m.\n", ns->name);
-			return -1;
-		}
-
-		if (setns(fd, ns->id) < 0) {
+		if (setns(ns->fd, ns->id) < 0) {
 			log_error("Unable to attach to namespace %s: %m.\n", ns->name);
-			close(fd);
-			return -1;
+			goto out;
 		}
 
 		trace("  %s: OK\n", ns->name);
-		close(fd);
 	}
 
-	chdir("/");
-	return 0;
+	rv = chdir("/");
+
+out:
+	for (ns = nsnames; ns->name; ++ns) {
+		if (ns->fd >= 0)
+			close(ns->fd);
+	}
+
+	return rv;
 }
 
 /*
