@@ -25,9 +25,14 @@
 #include "buffer.h"
 #include "tracing.h"
 
+#define REQUIRE_EXECVEAT_SYSCALL
+
 static struct console_slave *	processes;
 
 static bool			tty_check_ttyname(const char *tty_name, int tty_fd);
+#ifdef REQUIRE_EXECVEAT_SYSCALL
+extern int			execveat(int dir_fd, const char *pathname, char *const argv[], char *const envp[], int flags);
+#endif
 
 static const struct console_slave *
 process_exited(pid_t pid, int status, const struct rusage *rusage)
@@ -81,10 +86,15 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 {
 	struct console_slave *ret;
 	char slave_name[PATH_MAX];
-	int mfd;
+	int mfd, command_fd;
 	pid_t pid;
 
 	install_sigchild_handler();
+
+	/* Okay if this fails */
+	command_fd = open(settings->command, O_RDONLY);
+	if (command_fd >= 0)
+		fcntl(command_fd, F_SETFD, FD_CLOEXEC);
 
 	pid = forkpty(&mfd,
 			slave_name, /* an API from the stone age */
@@ -124,6 +134,12 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 		/* FIXME: close everything above fd 2 */
 
 		execv(settings->command, settings->argv);
+
+		if (command_fd >= 0) {
+			fcntl(command_fd, F_SETFD, 0);
+			execveat(command_fd, "", settings->argv, environ, AT_EMPTY_PATH);
+		}
+
 		log_fatal("unable to execute %s: %m\r\n", settings->command);
 	}
 
@@ -131,6 +147,9 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 	if (raw_mode)
 		ioctl(mfd, TIOCTTY, 1);
 #endif
+
+	if (command_fd >= 0)
+		close(command_fd);
 
 	fcntl(mfd, F_SETFD, FD_CLOEXEC);
 
@@ -351,3 +370,15 @@ process_free(struct console_slave *proc)
 
 	free(proc);
 }
+
+#ifdef REQUIRE_EXECVEAT_SYSCALL
+#include <sys/syscall.h>
+
+int
+execveat(int dir_fd, const char *pathname, char *const argv[], char *const envp[], int flags)
+{
+	return syscall(__NR_execveat, dir_fd, pathname, argv, envp, flags);
+}
+
+
+#endif
