@@ -71,7 +71,7 @@ container_has_command(const struct container *con, const char *command)
 
 	snprintf(cmdpath, sizeof(cmdpath), "../root/%s", command);
 	if (faccessat(con->procfd, cmdpath, X_OK, AT_SYMLINK_NOFOLLOW) < 0) {
-		log_error("unable to access %s in container %d: %m\n",
+		trace("unable to access %s in container %d: %m\n",
 				command, con->pid);
 		return false;
 	}
