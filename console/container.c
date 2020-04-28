@@ -119,7 +119,7 @@ container_attach(const struct container *con)
 	};
 	struct nsname *ns;
 
-	trace("child process joining namespaces of conainer\n");
+	trace("child process joining namespaces of container\n");
 #if 0
 	unshare(CLONE_NEWNS);
 #endif
