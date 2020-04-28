@@ -19,7 +19,8 @@
 #include "tracing.h"
 
 static bool		opt_debug = false;
-static const char *	opt_container_id = 0;
+static const char *	opt_container_id = NULL;
+static const char *	opt_mount = NULL;
 static bool		window_size_changed;
 
 static void
@@ -27,12 +28,16 @@ usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
-		"%s [-d] [-L filename] [-C pid-of-container]\n\n"
+		"%s [-d] [-L filename] [-C pid-of-container] [-M image:mountpoint]\n\n"
 		"  -C pid-of-container\n"
 		"           Run the shell in the context of the specified container\n"
 		"  -d       enable debugging\n"
 		"  -L filename\n"
 		"           write all messages to logfile\n"
+		"  -M image:mountpoint\n"
+		"           loop mount the specified image inside the container at mountpoint.\n"
+		"           The destination mount point must exist.\n"
+		"           This is not implemented yet.\n"
 		, argv0);
 	exit(exitval);
 }
@@ -43,7 +48,7 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt(argc, argv, "dC:L:")) != EOF) {
+	while ((c = getopt(argc, argv, "dC:L:M:")) != EOF) {
 		switch (c) {
 		case 'C':
 			opt_container_id = optarg;
@@ -55,6 +60,10 @@ parse_options(int argc, char **argv)
 
 		case 'L':
 			opt_logfile = optarg;
+			break;
+
+		case 'M':
+			opt_mount = optarg;
 			break;
 
 		default:
@@ -333,12 +342,32 @@ list_containers(void)
 int
 main(int argc, char **argv)
 {
+	const char *image = NULL, *mountpoint = NULL;
+
 	if (!parse_options(argc, argv))
 		return 1;
 
 	if (opt_container_id == 0) {
 		list_containers();
 		return 0;
+	}
+
+	if (opt_mount != NULL) {
+		char *s;
+
+		if (!(s = strchr(opt_mount, ':')))
+			log_fatal("mount option requires <dir1>:<dir2> syntax\n");
+		*s++ = '\0';
+
+		image = opt_mount;
+		mountpoint = s;
+
+		if (mountpoint[0] != '/')
+			log_fatal("mount option: mount point must be an absolute path\n");
+
+		log_fatal("Mount option not yet implemented\n");
+		(void) image;
+		(void) mountpoint;
 	}
 
 	run_shell(opt_container_id);
