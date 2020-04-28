@@ -317,8 +317,14 @@ run_shell(const char *container_id)
 		struct container *container;
 
 		container = container_open(container_id);
-		if (container == NULL || !container_has_command(container, "/bin/bash"))
+		if (container == NULL)
 			log_fatal("could not access container namespace dir\n");
+		if (!container_has_command(container, shell_settings.command)) {
+			if (access(shell_settings.command, R_OK) >= 0)
+				log_warning("container does not have %s - will try to substitute mine\n", shell_settings.command);
+			else
+				log_fatal("container does not have %s, and I cannot provide it\n", shell_settings.command);
+		}
 		shell_settings.container = container;
 	}
 
