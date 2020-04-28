@@ -28,4 +28,4 @@ include .depend
 endif
 
 depend:
-	gcc -I. -MM *.c >.depend
+	gcc $(CFLAGS) -MM *.c >.depend
