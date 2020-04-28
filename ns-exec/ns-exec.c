@@ -248,6 +248,7 @@ open_tty(struct termios *saved_termios)
 	int fd = 0;
 	struct termios tc;
 
+	trace("%s(%d)\n", __func__, fd);
 	if (!isatty(fd)) {
 		log_error("Standard input does not seem to be a tty.\n");
 		return -1;
@@ -267,6 +268,7 @@ open_tty(struct termios *saved_termios)
 		return -1;
 	}
 
+	logging_notify_raw_tty(true);
 	return fd;
 }
 
@@ -276,6 +278,7 @@ restore_tty(int fd, const struct termios *saved_termios)
 	if (tcsetattr(fd, TCSANOW, saved_termios) < 0) {
 		log_error("tcsetattr: %m");
 	}
+	logging_notify_raw_tty(false);
 }
 
 static void

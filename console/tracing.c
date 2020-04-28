@@ -20,6 +20,8 @@
 void		(*__tracing_hook)(const char *fmt, ...);
 
 static FILE *	logfile = NULL;
+static bool	logging_to_tty = false;
+static bool	logging_raw_tty = false;
 
 static FILE *
 __get_logf(void)
@@ -29,6 +31,8 @@ __get_logf(void)
 
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
 		logfile = fdopen(fd, "w");
+
+		logging_to_tty = isatty(fd);
 	}
 	return logfile;
 }
@@ -60,6 +64,27 @@ __log_prefix(const char *fmt, ...)
 	errno = saved_errno;
 }
 
+static void
+__log_format(const char *fmt, va_list ap)
+{
+	FILE *f = __get_logf();
+
+	if (fmt == NULL)
+		return;
+
+	vfprintf(f, fmt, ap);
+
+	/* When logging to a tty in raw mode, there is no automatic CRLF
+	 * translation. fudge it. */
+	if (logging_to_tty && logging_raw_tty) {
+		int n = strlen(fmt);
+		if (n && fmt[n-1] == '\n')
+			fputc('\r', f);
+	}
+	if (logging_to_tty)
+		fflush(f);
+}
+
 void
 log_warning(const char *fmt, ...)
 {
@@ -67,7 +92,7 @@ log_warning(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Warning: ");
-	vfprintf(__get_logf(), fmt, ap);
+	__log_format(fmt, ap);
 	va_end(ap);
 }
 
@@ -78,7 +103,7 @@ log_error(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Error: ");
-	vfprintf(__get_logf(), fmt, ap);
+	__log_format(fmt, ap);
 	va_end(ap);
 }
 
@@ -89,7 +114,7 @@ log_fatal(const char *fmt, ...)
 
 	va_start(ap, fmt);
 	__log_prefix("Fatal error: ");
-	vfprintf(__get_logf(), fmt, ap);
+	__log_format(fmt, ap);
 	va_end(ap);
 
 	exit(1);
@@ -121,6 +146,13 @@ void
 tracing_enable(void)
 {
 	__tracing_hook = __trace_logfile;
+}
+
+void
+logging_notify_raw_tty(bool on)
+{
+	trace("%s(%d)\n", __func__, on);
+	logging_raw_tty = on;
 }
 
 /*
