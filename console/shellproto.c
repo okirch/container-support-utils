@@ -459,7 +459,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 	if (settings == NULL)
 		settings = &default_session_settings;
 
-	shell = start_shell(settings->shell.command, settings->shell.argv, settings->shell.container, false);
+	shell = start_shell(&settings->shell, false);
 
 	fwd = io_shell_service_create(new_socket, shell, settings->auth_secret);
 

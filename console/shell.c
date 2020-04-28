@@ -77,7 +77,7 @@ install_sigchild_handler(void)
 }
 
 struct console_slave *
-start_shell(const char *cmd, char * const * argv, struct container *container, bool raw_mode)
+start_shell(const struct shell_settings *settings, bool raw_mode)
 {
 	struct console_slave *ret;
 	char slave_name[PATH_MAX];
@@ -102,8 +102,8 @@ start_shell(const char *cmd, char * const * argv, struct container *container, b
 #endif
 
 		/* attach to container's namespaces */
-		if (container) {
-			if (container_attach(container) < 0)
+		if (settings->container) {
+			if (container_attach(settings->container) < 0)
 				log_fatal("unable to attach to container namespaces\n");
 
 			/* After changing namespaces, tty(1) will fail (and consequently,
@@ -123,8 +123,8 @@ start_shell(const char *cmd, char * const * argv, struct container *container, b
 
 		/* FIXME: close everything above fd 2 */
 
-		execv(cmd, argv);
-		log_fatal("unable to execute %s: %m\r\n", cmd);
+		execv(settings->command, settings->argv);
+		log_fatal("unable to execute %s: %m\r\n", settings->command);
 	}
 
 #ifdef TIOCTTY

@@ -42,16 +42,17 @@ create_console_service(int fd, struct console_slave *console)
 static struct console_slave *
 create_cat_service(int sockfd)
 {
-	char *argv[] = {
-		"cat",
-		NULL
+	struct shell_settings shell_settings = {
+		.command	= "/usr/bin/cat",
+		.argv		= { "cat", NULL },
+		.container	= NULL,
 	};
 	struct console_slave *console;
 
 	/* The true argument changes the slave tty to raw mode.
 	 * In particular, this will turn echoing off, which would
 	 * otherwise confuse our testing. */
-	console = start_shell("/usr/bin/cat", argv, NULL, true);
+	console = start_shell(&shell_settings, true);
 
 	/* The first of the two sockets is the echo socket.
 	 * Its recvq is also its sendq. */

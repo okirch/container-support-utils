@@ -267,16 +267,21 @@ install_sigwinch_handler(void)
 static void
 run_shell(const char *container_id)
 {
+	struct shell_settings shell_settings = {
+		.command	= "/bin/bash",
+		.argv		= { "-sh", NULL },
+	};
 	struct termios terminal_settings;
-	char *argv[] = { "-sh", NULL };
 	struct console_slave *console;
-	struct container *container = NULL;
 	int tty_fd;
 
 	if (container_id != 0) {
+		struct container *container;
+
 		container = container_open(container_id);
 		if (container == NULL || !container_has_command(container, "/bin/bash"))
 			log_fatal("could not access container namespace dir\n");
+		shell_settings.container = container;
 	}
 
 	if ((tty_fd = open_tty(&terminal_settings)) < 0)
@@ -293,7 +298,7 @@ run_shell(const char *container_id)
 	unsetenv("HOSTNAME");
 	unsetenv("HOST");
 
-	console = start_shell("/bin/bash", argv, container, false);
+	console = start_shell(&shell_settings, false);
 	if (console == NULL)
 		log_fatal("Unable to start shell");
 
