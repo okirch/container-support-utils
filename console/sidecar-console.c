@@ -12,6 +12,7 @@
 #include <assert.h>
 
 #include "shell.h"
+#include "container.h"
 #include "tracing.h"
 
 static bool		opt_debug = false;

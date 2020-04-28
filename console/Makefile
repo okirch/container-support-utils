@@ -14,6 +14,7 @@ LIB		= libconsole.a
 LIBSRCS		= shellproto.c \
 		  forwarder.c \
 		  shell.c \
+		  container.c \
 		  mainloop.c \
 		  endpoint.c \
 		  queue.c \
