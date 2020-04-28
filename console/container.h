@@ -24,7 +24,7 @@ struct container {
 };
 
 extern int			container_list(struct container_info *result, unsigned int max);
-extern struct container *	container_open(pid_t pid);
+extern struct container *	container_open(const char *id);
 extern void			container_close(struct container *);
 extern bool			container_has_command(const struct container *, const char *command);
 extern int			container_attach(const struct container *);

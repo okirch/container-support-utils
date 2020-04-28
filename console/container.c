@@ -22,16 +22,23 @@
 #include "tracing.h"
 
 
+static int	try_parse_pid(const char *);
 static int	__container_uts_name(const char *proc_ns_uts_path, char **result);
 
 struct container *
-container_open(pid_t container_pid)
+container_open(const char *id)
 {
 	char procpath[PATH_MAX];
 	struct container *con;
+	pid_t pid;
 	int fd;
 
-	snprintf(procpath, sizeof(procpath), "/proc/%d/ns", container_pid);
+	if ((pid = try_parse_pid(id)) < 0) {
+		log_error("container_open: unknown container id \"%s\"\n", id);
+		return NULL;
+	}
+
+	snprintf(procpath, sizeof(procpath), "/proc/%d/ns", pid);
 	fd = open(procpath, O_RDONLY | O_DIRECTORY);
 	if (fd < 0) {
 		log_error("%s: %m\n", procpath);
@@ -43,7 +50,7 @@ container_open(pid_t container_pid)
 	trace("successfully opened %s.\n", procpath);
 
 	con = calloc(1, sizeof(*con));
-	con->pid = container_pid;
+	con->pid = pid;
 	con->procfd = fd;
 
 	return con;
@@ -178,10 +185,8 @@ container_list(struct container_info *result, unsigned int max)
 		char procpath[PATH_MAX];
 		struct stat stb;
 		pid_t pid;
-		char *end;
 
-		pid = strtoul(d->d_name, &end, 0);
-		if (*end)
+		if ((pid = try_parse_pid(d->d_name)) < 0)
 			continue;
 
 		snprintf(procpath, sizeof(procpath), "/proc/%s/ns/uts", d->d_name);
@@ -250,4 +255,17 @@ __container_uts_name(const char *proc_ns_uts_path, char **result)
 	*result = strdup(uts.nodename);
 
 	return 0;
+}
+
+static int
+try_parse_pid(const char *name)
+{
+	pid_t pid;
+	char *end;
+
+	pid = strtoul(name, &end, 0);
+	if (*end)
+		return -1;
+
+	return pid;
 }

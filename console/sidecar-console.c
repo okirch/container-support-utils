@@ -18,7 +18,7 @@
 static bool		opt_debug = false;
 static unsigned int	opt_port = 24666;
 static const char *	opt_secret = NULL;
-static int		opt_container_pid = 0;
+static const char *	opt_container_id = 0;
 
 static struct io_shell_session_settings *my_session_settings(void);
 
@@ -50,7 +50,7 @@ parse_options(int argc, char **argv)
 	while ((c = getopt(argc, argv, "dC:L:p:s:")) != EOF) {
 		switch (c) {
 		case 'C':
-			opt_container_pid = strtoul(optarg, NULL, 0);
+			opt_container_id = optarg;
 			break;
 
 		case 'd':
@@ -124,10 +124,10 @@ my_session_settings(void)
 		opt_secret = getenv("SIDECAR_SECRET");
 	shell_settings.auth_secret = opt_secret;
 
-	if (opt_container_pid) {
+	if (opt_container_id) {
 		struct container *con;
 
-		con = container_open(opt_container_pid);
+		con = container_open(opt_container_id);
 		if (con == NULL)
 			log_fatal("abort.\n");
 

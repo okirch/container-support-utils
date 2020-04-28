@@ -19,7 +19,7 @@
 #include "tracing.h"
 
 static bool		opt_debug = false;
-static int		opt_container_pid = 0;
+static const char *	opt_container_id = 0;
 static bool		window_size_changed;
 
 static void
@@ -46,7 +46,7 @@ parse_options(int argc, char **argv)
 	while ((c = getopt(argc, argv, "dC:L:")) != EOF) {
 		switch (c) {
 		case 'C':
-			opt_container_pid = strtoul(optarg, NULL, 0);
+			opt_container_id = optarg;
 			break;
 
 		case 'd':
@@ -265,7 +265,7 @@ install_sigwinch_handler(void)
 }
 
 static void
-run_shell(pid_t pid)
+run_shell(const char *container_id)
 {
 	struct termios terminal_settings;
 	char *argv[] = { "-sh", NULL };
@@ -273,8 +273,8 @@ run_shell(pid_t pid)
 	struct container *container = NULL;
 	int tty_fd;
 
-	if (pid != 0) {
-		container = container_open(pid);
+	if (container_id != 0) {
+		container = container_open(container_id);
 		if (container == NULL || !container_has_command(container, "/bin/bash"))
 			log_fatal("could not access container namespace dir\n");
 	}
@@ -331,11 +331,11 @@ main(int argc, char **argv)
 	if (!parse_options(argc, argv))
 		return 1;
 
-	if (opt_container_pid == 0) {
+	if (opt_container_id == 0) {
 		list_containers();
 		return 0;
 	}
 
-	run_shell(opt_container_pid);
+	run_shell(opt_container_id);
 	return 0;
 }
