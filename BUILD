@@ -16,7 +16,7 @@ TARBALL=installed.tar
 IMAGE=sidecar.tar
 
 mkdir -p instroot
-make DESTDIR=instroot install
+make DESTDIR=$PWD/instroot install
 tar -C instroot -cf $TARBALL .
 rm -rf instroot
 
