@@ -304,11 +304,37 @@ run_shell(pid_t pid)
 	process_kill(console);
 }
 
+static void
+list_containers(void)
+{
+	static const unsigned int MAX_CONTAINERS = 128;
+	struct container_info containers[MAX_CONTAINERS], *info;
+	int i, count;
+
+	if ((count = container_list(containers, MAX_CONTAINERS)) < 0)
+		log_fatal("Failed to get list of containers.\n");
+
+	if (count == 0) {
+		printf("No containers found.\n");
+		return;
+	}
+
+	printf("%5s %s\n", "PID", "HOSTNAME");
+	for (i = 0, info = containers; i < count; ++i, ++info) {
+		printf("%5u %s\n", info->pid, info->hostname? : "<not set>");
+	}
+}
+
 int
 main(int argc, char **argv)
 {
 	if (!parse_options(argc, argv))
 		return 1;
+
+	if (opt_container_pid == 0) {
+		list_containers();
+		return 0;
+	}
 
 	run_shell(opt_container_pid);
 	return 0;
