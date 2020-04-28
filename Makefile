@@ -6,7 +6,7 @@ BINDIR		= /usr/bin
 PYVERS		= python2.7
 PYLIBDIR	= /usr/lib/$(PYVERS)/site-packages/suse_sidecar
 
-SUBDIRS		= console
+SUBDIRS		= console ns-exec
 
 all:: $(PYAPP) $(PYMODULES)
 
