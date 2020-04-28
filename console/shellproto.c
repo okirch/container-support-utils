@@ -443,21 +443,23 @@ io_shell_service_create(struct endpoint *socket, struct console_slave *process, 
 static void
 __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 {
-	static struct io_shell_session_settings default_shell_settings = {
-		.command	= "/bin/bash",
-		.argv		= { "-sh", NULL },
-		.container	= NULL,
+	static struct io_session_settings default_session_settings = {
+		.shell = {
+			.command	= "/bin/bash",
+			.argv		= { "-sh", NULL },
+			.container	= NULL,
+		},
 	};
-	const struct io_shell_session_settings *settings = handle;
+	const struct io_session_settings *settings = handle;
 	struct io_forwarder *fwd;
 	struct console_slave *shell;
 
 	fcntl(new_socket->fd, F_SETFD, FD_CLOEXEC);
 
 	if (settings == NULL)
-		settings = &default_shell_settings;
+		settings = &default_session_settings;
 
-	shell = start_shell(settings->command, settings->argv, settings->container, false);
+	shell = start_shell(settings->shell.command, settings->shell.argv, settings->shell.container, false);
 
 	fwd = io_shell_service_create(new_socket, shell, settings->auth_secret);
 
@@ -471,7 +473,7 @@ __io_shell_service_accept(struct endpoint *new_socket, void *handle)
 }
 
 struct endpoint *
-io_shell_service_create_listener(const struct io_shell_session_settings *settings, struct sockaddr_in *listen_addr)
+io_shell_service_create_listener(const struct io_session_settings *settings, struct sockaddr_in *listen_addr)
 {
 	struct endpoint *ep;
 	struct sockaddr_in sin;

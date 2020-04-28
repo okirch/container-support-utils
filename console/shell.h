@@ -14,6 +14,14 @@
 
 struct container;
 
+#define SHELL_MAX_ARGS	16
+struct shell_settings {
+	const char *		command;
+	char *			argv[SHELL_MAX_ARGS];
+	struct container *	container;
+};
+
+
 struct console_slave {
 	int		master_fd;
 	char *		tty_name;
@@ -46,16 +54,12 @@ extern struct io_forwarder *	io_shell_service_create(struct endpoint *socket,
 					const char *auth_secret);
 
 #define IO_SHELL_MAX_ARGS	16
-struct io_shell_session_settings {
-	const char *		command;
-	char *			argv[IO_SHELL_MAX_ARGS];
-
+struct io_session_settings {
+	struct shell_settings	shell;
 	const char *		auth_secret;
-
-	struct container *	container;
 };
 
-extern struct endpoint *	io_shell_service_create_listener(const struct io_shell_session_settings *,
+extern struct endpoint *	io_shell_service_create_listener(const struct io_session_settings *,
 						struct sockaddr_in *listen_addr);
 
 extern struct endpoint *	io_shell_client_create(const struct sockaddr_in *svc_addr, int tty_fd,

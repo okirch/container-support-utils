@@ -20,7 +20,7 @@ static unsigned int	opt_port = 24666;
 static const char *	opt_secret = NULL;
 static const char *	opt_container_id = 0;
 
-static struct io_shell_session_settings *my_session_settings(void);
+static struct io_session_settings *my_session_settings(void);
 
 static void
 usage(const char *argv0, int exitval)
@@ -111,18 +111,20 @@ main(int argc, char **argv)
 	return 1;
 }
 
-struct io_shell_session_settings *
+struct io_session_settings *
 my_session_settings(void)
 {
-	static struct io_shell_session_settings shell_settings = {
-		.command	= "/bin/bash",
-		.argv		= { "-sh", NULL },
-		.container	= NULL,
+	static struct io_session_settings session_settings = {
+		.shell = {
+			.command	= "/bin/bash",
+			.argv		= { "-sh", NULL },
+			.container	= NULL,
+		},
         };
 
 	if (opt_secret == NULL)
 		opt_secret = getenv("SIDECAR_SECRET");
-	shell_settings.auth_secret = opt_secret;
+	session_settings.auth_secret = opt_secret;
 
 	if (opt_container_id) {
 		struct container *con;
@@ -131,10 +133,10 @@ my_session_settings(void)
 		if (con == NULL)
 			log_fatal("abort.\n");
 
-		if (!container_has_command(con, shell_settings.command))
+		if (!container_has_command(con, session_settings.shell.command))
 			log_fatal("giving up.\n");
 
-		shell_settings.container = con;
+		session_settings.shell.container = con;
 	}
-	return &shell_settings;
+	return &session_settings;
 }
