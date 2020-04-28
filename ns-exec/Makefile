@@ -1,10 +1,13 @@
 BINDIR		= /usr/bin
+MANDIR		= /usr/share/man/man1
 
 COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I../console $(COPT)
 NSEXEC		= ns-exec
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
+
+MANPAGES	= ns-exec.1
 
 all: $(NSEXEC)
 
@@ -19,6 +22,8 @@ install: $(NSEXEC)
 	esac
 	install -m 755 -d $(DESTDIR)$(BINDIR)
 	install -m 555 $(NSEXEC) $(DESTDIR)$(BINDIR)
+	install -m 755 -d $(DESTDIR)$(MANDIR)
+	install -m 444 $(MANPAGES) $(DESTDIR)$(MANDIR)
 
 ns-exec: ns-exec.o $(LIB)
 	$(CC) $(CFLAGS) -o $@ ns-exec.o $(LINK)

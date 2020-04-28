@@ -1,0 +1,95 @@
+.TH NS-EXEC 1 "26 April 2020"
+.UC 6
+.SH NAME
+ns-exec - open shell inside a running container
+.SH SYNOPSIS
+.BR ns-exec " [ \fIoptions\fP ...]
+.SH DESCRIPTION
+This support utility allows admins to open a shell in any container
+accessible from the current context.
+.P
+When invoked without arguments,
+.B ns-exec
+will display a list of visible containers (excluding itself).
+For each container,
+.B ns-exec
+display the PID of a running process within the container, and the
+container's nodename as returned by
+.BR uname (2).
+A container, in this case, is a group of processes sharing a
+common uts namespace.
+.P
+In order to start a shell inside a container, invoke
+.B ns-exec
+with the
+.B --container
+option, and specify a container ID. This ID can be either
+a pid of a process, or the nodename as described above.
+.P
+This will create a pty pair, fork a subprocess, attach it to the pty
+slave, and attach to all namespaces of the indicated container. If
+that is successful,
+.B ns-exec
+will execute
+.BR /bin/bash .
+.SS Options
+.TP
+.BI \-\-container " container-id\fR,\fP " \-C " container-id
+Identify the container in which to execute the shell process.
+.TP
+.BI \-\-mount " image:mountpoint\fR,\fP " \-M " image:mountpoint
+Future extension; not yet implemented. Intended to provide additional
+diagnostic tooling inside the container to be inspected.
+.TP
+.BR \-\-debug ", " \-d
+Enable debugging (currently somewhat terse). If no log file is specified,
+information is written to
+.B ns-exec.log
+in the current working directory.
+.TP
+.BI \-\-logfile " filename\fR,\fP " \-L " filename
+Specify a file to which debugging information is logged.
+.SH CONSIDERATIONS
+The easiest way to run this utility is to do so as root from the host side, because
+all required privileges are available.
+.P
+If the tool is to be included in a diagnostic container, you have to ensure
+that this container shares the pid namespace with the container(s) you wish
+to inspect, and that the diagnostic container has adequate privilege.
+.SS Diagnostic Standalone Container
+With this setup, you would create a container including the
+.B ns-exec
+utility (and possibly other useful stuff), and run it with full privilege,
+sharing the pid namespace with the host:
+.P
+.in +2
+.nf
+.B podman run --privileged --cap-add=all --pid=host -it \fImy-container\fP
+.fi
+.in
+.P
+If you now attach to your diagnostic container,
+.B ns-exec
+should be able to see (and enter) all containers running on this host.
+.P
+.SS Diagnostic Sidecar Container
+With this approach, you would create a pod that includes the original
+container, plus your diagnostic container, for instance like this:
+.P
+.in +2
+.nf
+.B podman pod create --name sleuth --share=pid
+.B id1=$(podman create --pod=sleuth --name=sleuth.main \fIorig-container\fP)
+.B id2=$(podman create --pod=sleuth --name=sleuth.sidecar --privileged=true \fImy-container\fP)
+.B podman pod start sleuth
+.fi
+.in
+.P
+If you now attach to the sidecar container,
+.B ns-exec should be able to see (and enter) just the container you wish to
+debug.
+.SH SEE ALSO
+.BR namespaces (7),
+.BR nsenter (1).
+.SH AUTHORS
+Written by Olaf Kirch <okir@suse.com>
