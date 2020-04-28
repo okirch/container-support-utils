@@ -23,6 +23,7 @@
 
 
 static int	try_parse_pid(const char *);
+static int	container_by_hostname(const char *);
 static int	__container_uts_name(const char *proc_ns_uts_path, char **result);
 
 struct container *
@@ -34,6 +35,9 @@ container_open(const char *id)
 	int fd;
 
 	if ((pid = try_parse_pid(id)) < 0) {
+		pid = container_by_hostname(id);
+	}
+	if (pid < 0) {
 		log_error("container_open: unknown container id \"%s\"\n", id);
 		return NULL;
 	}
@@ -241,6 +245,31 @@ next:		;
 
 	closedir(dir);
 	return num_containers;
+}
+
+/*
+ * Find pid of container identified by hostname
+ */
+int
+container_by_hostname(const char *name)
+{
+	struct container_info list[128], *info;
+	int i, count;
+	pid_t pid = -1;
+
+	count = container_list(list, 128);
+	if (count < 0)
+		return -1;
+
+	for (i = 0, info = list; i < count; ++i, ++info) {
+		if (info->hostname && !strcasecmp(info->hostname, name)) {
+			pid = info->pid;
+			break;
+		}
+	}
+
+	container_info_destroy(list, count);
+	return pid;
 }
 
 static int
