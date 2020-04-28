@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include "shell.h"
+#include "forwarder.h"
 #include "endpoint.h"
 #include "tracing.h"
 

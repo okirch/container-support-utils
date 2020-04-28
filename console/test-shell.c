@@ -11,7 +11,9 @@
 #include <stdint.h>
 #include <signal.h>
 #include <netinet/in.h>
+
 #include "shell.h"
+#include "forwarder.h"
 #include "endpoint.h"
 #include "testing.h"
 
