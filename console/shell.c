@@ -27,6 +27,8 @@
 
 static struct console_slave *	processes;
 
+static bool			tty_check_ttyname(const char *tty_name, int tty_fd);
+
 static const struct console_slave *
 process_exited(pid_t pid, int status, const struct rusage *rusage)
 {
@@ -100,8 +102,24 @@ start_shell(const char *cmd, char * const * argv, struct container *container, b
 #endif
 
 		/* attach to container's namespaces */
-		if (container && container_attach(container) < 0)
-			log_fatal("unable to attach to container namespaces\n");
+		if (container) {
+			if (container_attach(container) < 0)
+				log_fatal("unable to attach to container namespaces\n");
+
+			/* After changing namespaces, tty(1) will fail (and consequently,
+			 * bash will not consider itself a login shell).
+			 *
+			 * The reason for this is that tty does this:
+			 *
+			 * readlink("/proc/self/fd/0"), which returns sth like "/dev/pts/15",
+			 *	ie the name of the pts device in the _original_ namespace.
+			 * stat("/dev/pts/15"), which returns ENOENT, because in our new
+			 *	namespace, the pty will be /dev/pts/0.
+			 */
+
+			if (!tty_check_ttyname(slave_name, 1))
+				log_warning("namespace issue: ttyname(3) cannot identify slave pty\n");
+		}
 
 		/* FIXME: close everything above fd 2 */
 
@@ -174,6 +192,36 @@ tty_redirect_null(int tty_fd)
 	dup2(fd, tty_fd);
 	close(fd);
 	return 0;
+}
+
+bool
+tty_check_ttyname(const char *tty_name, int tty_fd)
+{
+	const char *name;
+
+#if 0
+	/* These are really different device minor numbers... */
+	{
+		struct stat stb1, stb2;
+
+		if (fstat(tty_fd, &stb1) >= 0)
+			printf("%s: dev %lx\n", tty_name, stb1.st_rdev);
+		if (stat("/dev/pts/0", &stb2) >= 0)
+			printf("%s: dev %lx\n", "/dev/pts/0", stb2.st_rdev);
+	}
+#endif
+
+	if ((name = ttyname(tty_fd)) == NULL) {
+		trace("ttyname() returns NULL for slave pty\n");
+		return false;
+	}
+
+	if (access(name, R_OK) < 0) {
+		trace("slave pty not accessible at %s\n", name);
+		return false;
+	}
+
+	return true;
 }
 
 void
