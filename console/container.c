@@ -151,7 +151,19 @@ container_attach(const struct container *con)
 }
 
 /*
- * Loop over all visible processes and check their namespaces.
+ * Destroy container info
+ */
+void
+container_info_destroy(struct container_info *info, unsigned int count)
+{
+	for (; count--; ++info) {
+		if (info->hostname)
+			free(info->hostname);
+	}
+}
+
+/*
+ * Return list of all containers visible from our namespace(s)
  */
 int
 container_list(struct container_info *result, unsigned int max)
