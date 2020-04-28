@@ -5,7 +5,7 @@
  */
 
 #include <sys/types.h>
-#include <sys/ioctl.h>
+#include <sys/utsname.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,15 +13,16 @@
 #include <signal.h>
 #include <unistd.h>
 #include <limits.h>
-#include <termios.h>
-#include <sys/wait.h>
+#include <dirent.h>
 #include <fcntl.h>
-#include <pty.h>
 #include <errno.h>
 #include <sched.h>
 
 #include "container.h"
 #include "tracing.h"
+
+
+static int	__container_uts_name(const char *proc_ns_uts_path, char **result);
 
 struct container *
 container_open(pid_t container_pid)
@@ -139,5 +140,102 @@ container_attach(const struct container *con)
 	}
 
 	chdir("/");
+	return 0;
+}
+
+/*
+ * Loop over all visible processes and check their namespaces.
+ */
+int
+container_list(struct container_info *result, unsigned int max)
+{
+	unsigned int num_containers = 0, i;
+	int saved_uts_namespace = -1;
+	struct container_info *info;
+	DIR *dir;
+	struct dirent *d;
+
+	if (!(dir = opendir("/proc"))) {
+		log_error("Unable to open /proc: %m\n");
+		return -1;
+	}
+
+	if ((saved_uts_namespace = open("/proc/self/ns/uts", O_RDONLY)) < 0) {
+		log_error("Unable to open /proc/self/ns/uts: %m\n");
+		closedir(dir);
+		return -1;
+	}
+
+	memset(result, 0, max * sizeof(result[0]));
+	while ((d = readdir(dir)) != NULL) {
+		char procpath[PATH_MAX];
+		struct stat stb;
+		pid_t pid;
+		char *end;
+
+		pid = strtoul(d->d_name, &end, 0);
+		if (*end)
+			continue;
+
+		snprintf(procpath, sizeof(procpath), "/proc/%s/ns/uts", d->d_name);
+		if (stat(procpath, &stb) < 0) {
+			if (errno != ENOENT)
+				log_warning("%s: %m\n", procpath);
+			continue;
+		}
+
+		for (i = 0; i < num_containers; ++i) {
+			info = &result[i];
+
+			if (info->__private.dev == stb.st_dev
+			 && info->__private.ino == stb.st_ino)
+				goto next;
+		}
+
+		/* Detected new namespace */
+		info = &result[num_containers++];
+		info->pid = pid;
+		info->__private.dev = stb.st_dev;
+		info->__private.ino = stb.st_ino;
+
+		__container_uts_name(procpath, &info->hostname);
+
+		if (num_containers >= max)
+			break;
+
+next:		;
+	}
+
+	if (setns(saved_uts_namespace, CLONE_NEWUTS) < 0)
+		log_warning("Unable to revert back to original uts namespace: %m\n");
+	close(saved_uts_namespace);
+
+	closedir(dir);
+	return num_containers;
+}
+
+static int
+__container_uts_name(const char *proc_ns_uts_path, char **result)
+{
+	struct utsname uts;
+	int fd;
+
+	if ((fd = open(proc_ns_uts_path, O_RDONLY)) < 0) {
+		log_error("%s: %m\n", proc_ns_uts_path);
+		return -1;
+	}
+
+	if (setns(fd, CLONE_NEWUTS) < 0) {
+		log_warning("Unable to attach to container uts namespace: %m\n");
+		return -1;
+	}
+
+	if (uname(&uts) < 0) {
+		log_error("Cannot get uname for container: %m\n");
+		return -1;
+	}
+
+	*result = strdup(uts.nodename);
+
 	return 0;
 }

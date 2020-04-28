@@ -9,11 +9,21 @@
 
 #include <stdbool.h>
 
+struct container_info {
+	pid_t			pid;
+	char *			hostname;
+
+	struct {
+		unsigned int	dev, ino;
+	} __private;
+};
+
 struct container {
 	pid_t			pid;
 	int			procfd;
 };
 
+extern int			container_list(struct container_info *result, unsigned int max);
 extern struct container *	container_open(pid_t pid);
 extern void			container_close(struct container *);
 extern bool			container_has_command(const struct container *, const char *command);
