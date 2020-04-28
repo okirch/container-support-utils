@@ -151,6 +151,7 @@ container_list(struct container_info *result, unsigned int max)
 {
 	unsigned int num_containers = 0, i;
 	int saved_uts_namespace = -1;
+	struct stat my_uts_stb;
 	struct container_info *info;
 	DIR *dir;
 	struct dirent *d;
@@ -162,6 +163,12 @@ container_list(struct container_info *result, unsigned int max)
 
 	if ((saved_uts_namespace = open("/proc/self/ns/uts", O_RDONLY)) < 0) {
 		log_error("Unable to open /proc/self/ns/uts: %m\n");
+		closedir(dir);
+		return -1;
+	}
+	if (fstat(saved_uts_namespace, &my_uts_stb) < 0) {
+		log_error("Unable to stat /proc/self/ns/uts: %m\n");
+		close(saved_uts_namespace);
 		closedir(dir);
 		return -1;
 	}
@@ -183,6 +190,11 @@ container_list(struct container_info *result, unsigned int max)
 				log_warning("%s: %m\n", procpath);
 			continue;
 		}
+
+		/* Ignore other processes running in our own uts namespace */
+		if (my_uts_stb.st_dev == stb.st_dev
+		 && my_uts_stb.st_ino == stb.st_ino)
+			continue;
 
 		for (i = 0; i < num_containers; ++i) {
 			info = &result[i];
