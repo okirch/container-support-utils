@@ -25,6 +25,11 @@ static const char *	opt_mount = NULL;
 static const char *	opt_shell = NULL;
 static bool		window_size_changed;
 
+static struct shell_settings shell_settings = {
+	.command	= "/bin/bash",
+	.argv		= { "-sh", NULL },
+};
+
 static struct option	long_options[] = {
 	{ "help",		no_argument,		NULL,	'h' },
 	{ "debug",		no_argument,		NULL,	'd' },
@@ -316,10 +321,6 @@ install_sigwinch_handler(void)
 static void
 run_shell(const char *container_id, const char *mnt_src, const char *mnt_dst)
 {
-	struct shell_settings shell_settings = {
-		.command	= "/bin/bash",
-		.argv		= { "-sh", NULL },
-	};
 	struct termios terminal_settings;
 	struct console_slave *console;
 	int tty_fd;
