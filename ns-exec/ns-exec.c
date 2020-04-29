@@ -21,8 +21,6 @@
 
 static bool		opt_debug = false;
 static const char *	opt_container_id = NULL;
-static const char *	opt_mount = NULL;
-static const char *	opt_shell = NULL;
 static bool		window_size_changed;
 
 static struct shell_settings shell_settings = {
@@ -77,6 +75,27 @@ usage(const char *argv0, int exitval)
 	exit(exitval);
 }
 
+static void
+parse_export_option(char *arg)
+{
+	char *host_path, *container_path;
+	char *s;
+
+	host_path = arg;
+
+	if (!(s = strchr(arg, ':')))
+		log_fatal("mount option requires <dir1>:<dir2> syntax\n");
+	*s++ = '\0';
+
+	container_path = s;
+
+	if (container_path[0] != '/')
+		log_fatal("mount option: mount point must be an absolute path\n");
+
+	export_dir_array_append(&shell_settings.export, host_path, container_path);
+}
+
+
 static bool
 parse_options(int argc, char **argv)
 {
@@ -101,11 +120,11 @@ parse_options(int argc, char **argv)
 			break;
 
 		case 'M':
-			opt_mount = optarg;
+			parse_export_option(optarg);
 			break;
 
 		case 'S':
-			opt_shell = optarg;
+			shell_settings.command = optarg;
 			break;
 
 		default:
@@ -319,14 +338,11 @@ install_sigwinch_handler(void)
 }
 
 static void
-run_shell(const char *container_id, const char *mnt_src, const char *mnt_dst)
+run_shell(const char *container_id)
 {
 	struct termios terminal_settings;
 	struct console_slave *console;
 	int tty_fd;
-
-	if (opt_shell)
-		shell_settings.command = opt_shell;
 
 	if (container_id != 0) {
 		struct container *container;
@@ -342,9 +358,6 @@ run_shell(const char *container_id, const char *mnt_src, const char *mnt_dst)
 		}
 		shell_settings.container = container;
 	}
-
-	if (mnt_src && mnt_dst)
-		export_dir_array_append(&shell_settings.export, mnt_src, mnt_dst);
 
 	if ((tty_fd = open_tty(&terminal_settings)) < 0)
 		exit(1);
@@ -395,8 +408,6 @@ list_containers(void)
 int
 main(int argc, char **argv)
 {
-	const char *image = NULL, *mountpoint = NULL;
-
 	if (!parse_options(argc, argv))
 		return 1;
 
@@ -405,20 +416,6 @@ main(int argc, char **argv)
 		return 0;
 	}
 
-	if (opt_mount != NULL) {
-		char *s;
-
-		if (!(s = strchr(opt_mount, ':')))
-			log_fatal("mount option requires <dir1>:<dir2> syntax\n");
-		*s++ = '\0';
-
-		image = opt_mount;
-		mountpoint = s;
-
-		if (mountpoint[0] != '/')
-			log_fatal("mount option: mount point must be an absolute path\n");
-	}
-
-	run_shell(opt_container_id, image, mountpoint);
+	run_shell(opt_container_id);
 	return 0;
 }
