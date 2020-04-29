@@ -30,6 +30,7 @@
 static struct console_slave *	processes;
 
 static bool			tty_check_ttyname(const char *tty_name, int tty_fd);
+static int			funky_fork(int flags);
 #ifdef REQUIRE_EXECVEAT_SYSCALL
 extern int			execveat(int dir_fd, const char *pathname, char *const argv[], char *const envp[], int flags);
 #endif
@@ -113,8 +114,24 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 
 		/* attach to container's namespaces */
 		if (settings->container) {
+			struct export_state *export_state;
+
+			if (export_dir_prepare(&settings->export, &export_state) < 0) {
+				export_state_destroy(export_state);
+				export_state = NULL;
+			}
+
 			if (container_attach(settings->container) < 0)
 				log_fatal("unable to attach to container namespaces\n");
+
+			if (funky_fork(CLONE_NEWNS) < 0)
+				log_fatal("abort.\n");
+
+			if (export_state && export_state_apply(export_state) < 0)
+				log_error("Unable to export some or all host directories as requested\n");
+
+			export_state_destroy(export_state);
+			export_state = NULL;
 
 			/* After changing namespaces, tty(1) will fail (and consequently,
 			 * bash will not consider itself a login shell).
@@ -369,6 +386,45 @@ process_free(struct console_slave *proc)
 	__unblock_sigchild(&oset);
 
 	free(proc);
+}
+
+/*
+ * An implementation of fork() that takes clone flags
+ */
+#include <setjmp.h>
+
+static int
+dummy_thread(void *data)
+{
+	jmp_buf *buf = (jmp_buf *) data;
+
+	longjmp(*buf, 1);
+}
+
+int
+funky_fork(int flags)
+{
+	static char stack[4096];
+	jmp_buf buf;
+	pid_t pid;
+
+	if (setjmp(buf) != 0) {
+		/* We're in the child process now */
+		return 0;
+	}
+
+	pid = clone(dummy_thread, stack + sizeof(stack), flags | SIGCHLD, &buf);
+	if (pid < 0)
+		log_fatal("%s: %m\n", __func__);
+
+	/* We're the session group leader, we should not exit. */
+	trace("%s: clone() = %d\n", __func__, pid);
+	while (waitpid(pid, NULL, 0) < 0) {
+		if (errno == ECHILD)
+			break;
+		log_error("waitpid: %m\n");
+	}
+	exit(0);
 }
 
 #ifdef REQUIRE_EXECVEAT_SYSCALL

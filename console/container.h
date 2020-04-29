@@ -30,4 +30,11 @@ extern void			container_close(struct container *);
 extern bool			container_has_command(const struct container *, const char *command);
 extern int			container_attach(const struct container *);
 
+struct export_state;
+struct export_dir_array;
+
+extern int			export_dir_prepare(const struct export_dir_array *ap, struct export_state **retp);
+extern void			export_state_destroy(struct export_state *state_list);
+extern int			export_state_apply(struct export_state *state_list);
+
 #endif /* _CONTAINER_H */

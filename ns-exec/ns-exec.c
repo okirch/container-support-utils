@@ -314,7 +314,7 @@ install_sigwinch_handler(void)
 }
 
 static void
-run_shell(const char *container_id)
+run_shell(const char *container_id, const char *mnt_src, const char *mnt_dst)
 {
 	struct shell_settings shell_settings = {
 		.command	= "/bin/bash",
@@ -341,6 +341,9 @@ run_shell(const char *container_id)
 		}
 		shell_settings.container = container;
 	}
+
+	if (mnt_src && mnt_dst)
+		export_dir_array_append(&shell_settings.export, mnt_src, mnt_dst);
 
 	if ((tty_fd = open_tty(&terminal_settings)) < 0)
 		exit(1);
@@ -413,12 +416,8 @@ main(int argc, char **argv)
 
 		if (mountpoint[0] != '/')
 			log_fatal("mount option: mount point must be an absolute path\n");
-
-		log_fatal("Mount option not yet implemented\n");
-		(void) image;
-		(void) mountpoint;
 	}
 
-	run_shell(opt_container_id);
+	run_shell(opt_container_id, image, mountpoint);
 	return 0;
 }

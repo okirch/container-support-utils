@@ -14,11 +14,26 @@
 
 struct container;
 
+struct export_dir {
+	const char *		host_path;
+	const char *		container_path;
+};
+
+#define EXPORT_DIR_MAX		16
+struct export_dir_array {
+	struct export_dir	dirs[EXPORT_DIR_MAX];
+	unsigned int		count;
+};
+
+struct export_state;
+
 #define SHELL_MAX_ARGS	16
 struct shell_settings {
 	const char *		command;
 	char *			argv[SHELL_MAX_ARGS];
 	struct container *	container;
+
+	struct export_dir_array	export;
 };
 
 
@@ -45,6 +60,9 @@ extern void			process_free(struct console_slave *proc);
 extern int			tty_get_window_size(int fd, unsigned int *rows, unsigned int *cols);
 extern int			tty_set_window_size(int fd, unsigned int rows, unsigned int cols);
 extern int			tty_redirect_null(int tty_fd);
+
+extern void			export_dir_array_append(struct export_dir_array *, const char *, const char *);
+extern void			export_dir_array_destroy(struct export_dir_array *);
 
 struct io_session_auth;
 

@@ -15,6 +15,7 @@ LIBSRCS		= shellproto.c \
 		  forwarder.c \
 		  shell.c \
 		  container.c \
+		  filesystem.c \
 		  mainloop.c \
 		  endpoint.c \
 		  queue.c \

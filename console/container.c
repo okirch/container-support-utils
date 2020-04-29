@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -138,8 +139,6 @@ container_attach(const struct container *con)
 	}
 
 	for (ns = nsnames; ns->name; ++ns) {
-		int fd;
-
 		if (ns->fd < 0) {
 			trace("  %s: already a member\n", ns->name);
 			continue;
