@@ -34,7 +34,7 @@ static struct option	long_options[] = {
 	{ "container",		required_argument,	NULL,	'C' },
 	{ "logfile",		required_argument,	NULL,	'L' },
 	{ "shell",		required_argument,	NULL,	'S' },
-	{ "mount",		required_argument,	NULL,	'M' },
+	{ "export",		required_argument,	NULL,	'E' },
 	{ NULL }
 };
 
@@ -61,11 +61,11 @@ usage(const char *argv0, int exitval)
 		"           Specify a different shell binary.\n"
 		"           The default shell is /bin/bash.\n"
 		"\n"
-		"  -M image:mountpoint\n"
-		"  --mount image:mountpoint\n"
-		"           loop mount the specified image inside the container at mountpoint.\n"
+		"  -E host-path:container-path\n"
+		"  --export host-path:container-path\n"
+		"           Mount the specified host-path inside the container at container-path.\n"
 		"           The destination mount point must exist.\n"
-		"           This is not implemented yet.\n"
+		"           This option can be given several times in order to export more than one directory.\n"
 		"\n"
 		"  -h, --help\n"
 		"           display this message.\n"
@@ -84,13 +84,13 @@ parse_export_option(char *arg)
 	host_path = arg;
 
 	if (!(s = strchr(arg, ':')))
-		log_fatal("mount option requires <dir1>:<dir2> syntax\n");
+		log_fatal("export option requires <dir1>:<dir2> syntax\n");
 	*s++ = '\0';
 
 	container_path = s;
 
 	if (container_path[0] != '/')
-		log_fatal("mount option: mount point must be an absolute path\n");
+		log_fatal("export option: mount point must be an absolute path\n");
 
 	export_dir_array_append(&shell_settings.export, host_path, container_path);
 }
@@ -102,7 +102,7 @@ parse_options(int argc, char **argv)
 	const char *opt_logfile = NULL;
 	int c;
 
-	while ((c = getopt_long(argc, argv, "hdC:L:M:S:", long_options, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "hdC:L:E:S:", long_options, NULL)) != EOF) {
 		switch (c) {
 		case 'C':
 			opt_container_id = optarg;
@@ -119,7 +119,7 @@ parse_options(int argc, char **argv)
 			opt_logfile = optarg;
 			break;
 
-		case 'M':
+		case 'E':
 			parse_export_option(optarg);
 			break;
 

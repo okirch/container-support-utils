@@ -49,9 +49,29 @@ will then try to execute the busybox image inside the target
 container (using
 .BR execveat (2)).
 .TP
-.BI \-\-mount " image:mountpoint\fR,\fP " \-M " image:mountpoint
-Future extension; not yet implemented. Intended to provide additional
-diagnostic tooling inside the container to be inspected.
+.BI \-\-export " host-path:container-path\fR,\fP " \-M " host-path:container-path
+This option allows you to provide additional tooling in the container
+you wish to inspect, such as
+.B strace
+or
+.BR vi .
+When given this option, ns-exec will attempt to mount the given
+.I host-path
+(in the host namespace) on directory
+.I container-path
+inside the container namespace.
+.IP
+Two caveats apply. Firstly, the
+.I container-path
+mount point is expected to exist; it is not created on the fly.
+Second, this mechanism can currently only be used to export files
+\fIto\fP the container. Due to the way this directory is set up
+inside the container, changes made to them will not be propagated
+back to the host.
+.IP
+So in particular, if you collect log files in the
+container and later wish to export them, this is not possible at
+the moment. Getting this to work nicely will require more work.
 .TP
 .BR \-\-debug ", " \-d
 Enable debugging (currently somewhat terse). If no log file is specified,
@@ -98,8 +118,8 @@ container, plus your diagnostic container, for instance like this:
 .in
 .P
 If you now attach to the sidecar container,
-.B ns-exec should be able to see (and enter) just the container you wish to
-debug.
+.B ns-exec
+should be able to see (and enter) just the container you wish to debug.
 .SH SEE ALSO
 .BR namespaces (7),
 .BR nsenter (1).
