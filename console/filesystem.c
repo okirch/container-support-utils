@@ -59,7 +59,7 @@ export_dir_array_destroy(struct export_dir_array *ap)
 	struct export_dir *ed;
 	unsigned int i;
 
-	for (i = 0, ed = ap->dirs; i < ap->count; ++i, ++ap) {
+	for (i = 0, ed = ap->dirs; i < ap->count; ++i, ++ed) {
 		free(&ed->host_path);
 		free(&ed->container_path);
 	}
@@ -79,7 +79,7 @@ export_dir_prepare(const struct export_dir_array *ap, struct export_state **retp
 	*retp = NULL;
 
 
-	for (i = 0, ed = ap->dirs; i < ap->count; ++i, ++ap) {
+	for (i = 0, ed = ap->dirs; i < ap->count; ++i, ++ed) {
 		struct export_state *st;
 		int fd;
 
