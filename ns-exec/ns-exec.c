@@ -21,11 +21,21 @@
 
 static bool		opt_debug = false;
 static const char *	opt_container_id = NULL;
+static const char *	opt_savelog_destination = NULL;
 static bool		window_size_changed;
+
+extern int		savelog_init(const char *destination);
+extern void		savelog_post_nsenter_cb(void);
+extern int		savelog_proxy_start(void);
+
 
 static struct shell_settings shell_settings = {
 	.command	= "/bin/bash",
 	.argv		= { "-sh", NULL },
+};
+
+enum {
+	OPT_SAVELOGS	= 256,
 };
 
 static struct option	long_options[] = {
@@ -35,6 +45,7 @@ static struct option	long_options[] = {
 	{ "logfile",		required_argument,	NULL,	'L' },
 	{ "shell",		required_argument,	NULL,	'S' },
 	{ "export",		required_argument,	NULL,	'E' },
+	{ "savelogs",		required_argument,	NULL,	OPT_SAVELOGS },
 	{ NULL }
 };
 
@@ -125,6 +136,10 @@ parse_options(int argc, char **argv)
 
 		case 'S':
 			shell_settings.command = optarg;
+			break;
+
+		case OPT_SAVELOGS:
+			opt_savelog_destination = optarg;
 			break;
 
 		default:
@@ -374,6 +389,8 @@ run_shell(const char *container_id)
 	unsetenv("HOSTNAME");
 	unsetenv("HOST");
 
+	shell_settings.post_nsenter_cb = savelog_post_nsenter_cb;
+
 	console = start_shell(&shell_settings, false);
 	if (console == NULL)
 		log_fatal("Unable to start shell");
@@ -382,7 +399,7 @@ run_shell(const char *container_id)
 
 	restore_tty(tty_fd, &terminal_settings);
 
-	process_kill(console);
+	process_hangup(console);
 }
 
 static void
@@ -416,6 +433,11 @@ main(int argc, char **argv)
 		list_containers();
 		return 0;
 	}
+
+	if (opt_savelog_destination
+	 && savelog_init(opt_savelog_destination) < 0)
+		exit(1);
+
 
 	run_shell(opt_container_id);
 	return 0;
