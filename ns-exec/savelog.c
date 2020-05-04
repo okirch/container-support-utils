@@ -13,12 +13,28 @@
 
 static bool	opt_force = false;
 
+static struct option	long_options[] = {
+	{ "force",		no_argument,		NULL,	'f' },
+	{ "help",		no_argument,		NULL,	'h' },
+	{ "debug",		no_argument,		NULL,	'd' },
+	{ NULL }
+};
+
 static void
 usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
 		"%s [-dfh] <pathname>\n"
+		"\n"
+		"  -d, --debug\n"
+		"           enable debugging\n"
+		"\n"
+		"  -f, --force\n"
+		"           overwrite saved logfiles if they exist\n"
+		"\n"
+		"  -h, --help\n"
+		"           display this message.\n"
 		, argv0);
 	exit(exitval);
 }
@@ -28,7 +44,7 @@ parse_options(int argc, char **argv)
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "dhf")) != EOF) {
+	while ((c = getopt_long(argc, argv, "dhf", long_options, NULL)) != EOF) {
 		switch (c) {
 		case 'd':
 			tracing_enable();
