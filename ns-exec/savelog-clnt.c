@@ -111,7 +111,7 @@ failed:
 }
 
 static int
-savelog_dirfd_send(int dirfd, const char *pathname)
+savelog_dirfd_send(struct savelog *savelog, const char *pathname)
 {
 	char *outname;
 	int infd = -1, outfd = -1;
@@ -122,7 +122,7 @@ savelog_dirfd_send(int dirfd, const char *pathname)
 
 	outname = savelog_dirfd_make_name(pathname);
 
-	trace("Trying to save %s to dir @fd=%d\n", pathname, dirfd);
+	trace("Trying to save %s to dir @fd=%d\n", pathname, savelog->fd);
 	if ((infd = open(pathname, O_RDONLY)) < 0) {
 		log_error("savelog: unable to open \"%s\": %m\n", pathname);
 		goto failed;
@@ -134,7 +134,7 @@ savelog_dirfd_send(int dirfd, const char *pathname)
 	}
 	size = stb.st_size;
 
-	if ((outfd = savelog_dirfd_open(dirfd, pathname)) < 0)
+	if ((outfd = savelog_dirfd_open(savelog->fd, pathname)) < 0)
 		goto failed;
 
 	while (total < size) {
@@ -159,14 +159,17 @@ failed:
 	return rv;
 }
 
-int
-savelog_send_file(const char *pathname)
+struct savelog *
+savelog_connect(void)
 {
-	int dirfd;
+	struct savelog *ret;
 
-	if ((dirfd = savelog_dirfd_get()) >= 0)
-		return savelog_dirfd_send(dirfd, pathname);
+	ret = calloc(1, sizeof(*ret));
+	if ((ret->fd = savelog_dirfd_get()) >= 0) {
+		ret->send = savelog_dirfd_send;
+		return ret;
+	}
 
-	log_fatal("savelog: session not running with savelog support\n");
-	return -1;
+	free(ret);
+	return NULL;
 }

@@ -50,15 +50,19 @@ parse_options(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
+	struct savelog *savelog;
 	int nameidx;
 
 	if ((nameidx = parse_options(argc, argv)) < 0)
 		return 1;
 
+	if (!(savelog = savelog_connect()))
+		log_fatal("No savelog facility available in this session\n");
+
 	while (nameidx < argc) {
 		const char *fname = argv[nameidx++];
 
-		if (savelog_send_file(fname) < 0) {
+		if (savelog_send_file(savelog, fname) < 0) {
 			log_error("Failed to save \"%s\"\n", fname);
 			return 1;
 		}
