@@ -18,6 +18,7 @@
 #include "shell.h"
 #include "container.h"
 #include "tracing.h"
+#include "savelog.h"
 
 static bool		opt_debug = false;
 static const char *	opt_container_id = NULL;

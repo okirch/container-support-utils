@@ -9,8 +9,7 @@
 #include <getopt.h>
 
 #include "tracing.h"
-
-extern int		savelog_send_file(const char *path);
+#include "savelog.h"
 
 static void
 usage(const char *argv0, int exitval)

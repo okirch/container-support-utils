@@ -14,6 +14,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "savelog.h"
 #include "tracing.h"
 
 

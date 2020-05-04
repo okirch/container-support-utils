@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "savelog.h"
+
 #include "tracing.h"
 
 
