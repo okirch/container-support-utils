@@ -27,8 +27,12 @@ parse_options(int argc, char **argv)
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "h")) != EOF) {
+	while ((c = getopt(argc, argv, "dh")) != EOF) {
 		switch (c) {
+		case 'd':
+			tracing_enable();
+			break;
+
 		case 'h':
 			usage(argv[0], 0);
 

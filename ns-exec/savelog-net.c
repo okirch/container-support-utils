@@ -6,6 +6,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/sendfile.h>
 #include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <libtar.h>
 
@@ -117,10 +119,8 @@ savelog_proxy_start(void)
 	pid_t pid;
 	int rv = -1;
 
-	if (savelog_store_fn == NULL) {
-		log_error("Cannot start savelog service; no store function set\n");
-		return -1;
-	}
+	if (savelog_store_fn == NULL)
+		return 0;
 
 	if ((sock_fd = socket(PF_LOCAL, SOCK_DGRAM, 0)) < 0) {
 		log_error("Unable to open AF_LOCAL dgram socket: %m\n");
@@ -332,8 +332,8 @@ savelog_connect_sockname(int fd)
 	return 0;
 }
 
-int
-savelog_send_file(const char *pathname)
+static int
+savelog_proxy_send(const char *pathname)
 {
 	char *abspath = NULL;
 	int sock_fd = -1, rv = -1;
@@ -373,4 +373,153 @@ out:
 		free(abspath);
 
 	return rv;
+}
+
+static int
+savelog_dirfd_get(void)
+{
+	const char *description;
+	unsigned long dev, ino;
+	int fd;
+	struct stat stb;
+
+	if ((description = getenv("SAVELOG_DIRFD")) == NULL)
+		return -1;
+
+	trace("Trying to parse SAVELOG_DIRFD=%s\n", description);
+	if (sscanf(description, "%d,%lu/%lu", &fd, &dev, &ino) != 3)
+		return -1;
+
+	if (fstat(fd, &stb) < 0)
+		return -1;
+
+	if (stb.st_dev != dev || stb.st_ino != ino)
+		return -1;
+
+	return fd;
+}
+
+static char *
+savelog_dirfd_make_name(const char *pathname)
+{
+	char *rv, *s;
+
+	while (pathname[0] == '/')
+		++pathname;
+
+	rv = strdup(pathname);
+
+	for (s = rv; *s; ++s)
+		if (*s == '/')
+			*s = '-';
+
+	return rv;
+}
+
+static int
+savelog_dirfd_open(int dirfd, const char *pathname)
+{
+	char *outname, *realname, *s;
+	int outfd = -1;
+
+	realname = realpath(pathname, NULL);
+
+	for (outname = realname; *outname == '/'; ++outname)
+		;
+
+	if (*outname == '\0') {
+		log_error("Invalid output filename \"%s\"\n", realname);
+		goto failed;
+	}
+
+	for (s = outname; *s; ) {
+		char *begin;
+
+		while (*s == '/')
+			++s;
+
+		begin = s;
+		s = begin + strcspn(begin, "/");
+		if (*s == '\0')
+			break;
+
+		*s = '\0';
+		if (mkdirat(dirfd, outname, 0755) < 0) {
+			if (errno != EEXIST) {
+				log_error("Unable to create %s in savelog directory: %s\n", outname);
+				goto failed;
+			}
+		}
+
+		*s = '/';
+	}
+
+	if ((outfd = openat(dirfd, outname, O_WRONLY|O_CREAT|O_EXCL, 0600)) < 0) {
+		log_error("savelog: unable to open \"%s\": %m\n", outname);
+		goto failed;
+	}
+
+failed:
+	free(realname);
+	return outfd;
+}
+
+static int
+savelog_dirfd_send(int dirfd, const char *pathname)
+{
+	char *outname;
+	int infd = -1, outfd = -1;
+	unsigned long total = 0, size;
+	struct stat stb;
+	off_t offset = 0;
+	int n, rv = -1;
+
+	outname = savelog_dirfd_make_name(pathname);
+
+	trace("Trying to save %s to dir @fd=%d\n", pathname, dirfd);
+	if ((infd = open(pathname, O_RDONLY)) < 0) {
+		log_error("savelog: unable to open \"%s\": %m\n", pathname);
+		goto failed;
+	}
+
+	if (fstat(infd, &stb) < 0) {
+		log_error("savelog: unable to stat \"%s\": %m\n", pathname);
+		goto failed;
+	}
+	size = stb.st_size;
+
+	if ((outfd = savelog_dirfd_open(dirfd, pathname)) < 0)
+		goto failed;
+
+	while (total < size) {
+		n = sendfile(outfd, infd, &offset, size - total);
+		if (n < 0) {
+			log_error("sendfile: %m\n");
+			goto failed;
+		}
+
+		total += n;
+	}
+
+	rv = 0;
+
+failed:
+	if (infd >= 0)
+		close(infd);
+	if (outfd >= 0)
+		close(outfd);
+	if (outname)
+		free(outname);
+	return rv;
+}
+
+int
+savelog_send_file(const char *pathname)
+{
+	int dirfd;
+
+	if ((dirfd = savelog_dirfd_get()) >= 0)
+		return savelog_dirfd_send(dirfd, pathname);
+
+	return savelog_proxy_send(pathname);
 }
