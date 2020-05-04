@@ -61,6 +61,13 @@ container_open(const char *id)
 	return con;
 }
 
+void
+container_close(struct container *con)
+{
+	if (con->procfd >= 0)
+		close(con->procfd);
+	free(con);
+}
 
 bool
 container_has_command(const struct container *con, const char *command)

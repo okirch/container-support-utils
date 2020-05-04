@@ -395,6 +395,11 @@ run_shell(const char *container_id)
 	if (console == NULL)
 		log_fatal("Unable to start shell");
 
+	if (shell_settings.container) {
+		container_close(shell_settings.container);
+		shell_settings.container = NULL;
+	}
+
 	doio_shell(tty_fd, console->master_fd);
 
 	restore_tty(tty_fd, &terminal_settings);
