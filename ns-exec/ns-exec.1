@@ -78,8 +78,19 @@ inside the container, changes made to them will not be propagated
 back to the host.
 .IP
 So in particular, if you collect log files in the
-container and later wish to export them, this is not possible at
-the moment. Getting this to work nicely will require more work.
+container and later wish to export them, writing them to an
+exported directory is not the right approach. This is what the
+.B \-\-savelogs
+option is for.
+.TP
+.BI \-\-savelogs " directory
+This option enables you to save log files from within the container
+to a designated directory in the host context. In order to use this
+facility, you need the
+.BR savelog (1)
+helper program accessible inside the container (for example, by
+exporting it to your shell session via
+.BR \-\-export ).
 .TP
 .BR \-\-debug ", " \-d
 Enable debugging (currently somewhat terse). If no log file is specified,
@@ -130,6 +141,7 @@ If you now attach to the sidecar container,
 should be able to see (and enter) just the container you wish to debug.
 .SH SEE ALSO
 .BR namespaces (7),
+.BR savelog (1),
 .BR nsenter (1).
 .SH AUTHORS
 Written by Olaf Kirch <okir@suse.com>

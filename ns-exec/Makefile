@@ -12,7 +12,7 @@ SAVELOG_OBJS	= $(SAVELOG_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
 
-MANPAGES	= ns-exec.1
+MANPAGES	= ns-exec.1 savelog.1
 
 all: $(NSEXEC) $(SAVELOG)
 

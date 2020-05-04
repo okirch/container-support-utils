@@ -1,0 +1,39 @@
+.TH SAVELOG 1 "26 April 2020"
+.UC 6
+.SH NAME
+savelog - save log files from within an ns-exec session
+.SH SYNOPSIS
+.BR savelog " [ \fIoptions\fP ...] \fIfilename\fP ...
+.SH DESCRIPTION
+This utility works within a shell session spawned by
+.BR ns-exec (1).
+For example, it could be used like this:
+.P
+.in +2
+.nf
+.BI "# " "ns-exec --export /opt/tools:/mnt --savelogs ./diagnostics -C testcontainer
+.B ...
+.BI "testcontainer# " "/mnt/savelog /var/log/myapplication.log
+.B Stored /var/log/myapplication.log
+.fi
+.in
+.P
+This will transfer myapplication.log from the container's filesystem
+and store it as
+.BR ./diagnostics/var/log/myapplication.log .
+.SH IMPLEMENTATION NOTE
+At the moment,
+.B savelog
+works by opening the savelog directory in the host context, and passing the
+open file descriptor to the shell session. The fd is identified by an
+environment variable passed to the shell and its children. This allows
+.BR savelog (1)
+to access the directory and create files and directories within it.
+.P
+However, users of 
+.B savelog
+should not rely on specific properties of this approach.
+.SH SEE ALSO
+.BR ns-exec (1).
+.SH AUTHORS
+Written by Olaf Kirch <okir@suse.com>
