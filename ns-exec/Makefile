@@ -4,10 +4,10 @@ MANDIR		= /usr/share/man/man1
 COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I../console $(COPT)
 NSEXEC		= ns-exec
-NSEXEC_SRCS	= ns-exec.c savelog-net.c savelog-svc.c
+NSEXEC_SRCS	= ns-exec.c savelog-svc.c
 NSEXEC_OBJS	= $(NSEXEC_SRCS:.c=.o)
 SAVELOG		= savelog
-SAVELOG_SRCS	= savelog.c savelog-net.c
+SAVELOG_SRCS	= savelog.c savelog-clnt.c
 SAVELOG_OBJS	= $(SAVELOG_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
@@ -32,7 +32,7 @@ install: $(NSEXEC)
 	install -m 444 $(MANPAGES) $(DESTDIR)$(MANDIR)
 
 ns-exec: $(NSEXEC_OBJS) $(LIB)
-	$(CC) $(CFLAGS) -o $@ $(NSEXEC_OBJS) $(LINK) -ltar
+	$(CC) $(CFLAGS) -o $@ $(NSEXEC_OBJS) $(LINK)
 
 savelog: $(SAVELOG_OBJS) $(LIB)
 	$(CC) $(CFLAGS) -o $@ $(SAVELOG_OBJS) $(LINK)

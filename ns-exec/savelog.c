@@ -63,6 +63,8 @@ main(int argc, char **argv)
 			log_error("Failed to save \"%s\"\n", fname);
 			return 1;
 		}
+
+		printf("Stored %s\n", fname);
 	}
 
 	return 0;

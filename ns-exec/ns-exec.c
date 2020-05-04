@@ -25,8 +25,6 @@ static const char *	opt_savelog_destination = NULL;
 static bool		window_size_changed;
 
 extern int		savelog_init(const char *destination);
-extern void		savelog_post_nsenter_cb(void);
-extern int		savelog_proxy_start(void);
 
 
 static struct shell_settings shell_settings = {
@@ -388,8 +386,6 @@ run_shell(const char *container_id)
 	 */
 	unsetenv("HOSTNAME");
 	unsetenv("HOST");
-
-	shell_settings.post_nsenter_cb = savelog_post_nsenter_cb;
 
 	console = start_shell(&shell_settings, false);
 	if (console == NULL)
