@@ -112,6 +112,9 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 		}
 #endif
 
+		if (settings->pre_nsenter_cb)
+			settings->pre_nsenter_cb();
+
 		/* attach to container's namespaces */
 		if (settings->container) {
 			struct export_state *export_state;
@@ -147,6 +150,10 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 			if (!tty_check_ttyname(slave_name, 1))
 				log_warning("namespace issue: ttyname(3) cannot identify slave pty\n");
 		}
+
+		if (settings->post_nsenter_cb)
+			settings->post_nsenter_cb();
+
 
 		/* FIXME: close everything above fd 2 */
 

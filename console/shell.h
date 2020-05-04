@@ -34,6 +34,9 @@ struct shell_settings {
 	struct container *	container;
 
 	struct export_dir_array	export;
+
+	void			(*pre_nsenter_cb)(void);
+	void			(*post_nsenter_cb)(void);
 };
 
 
