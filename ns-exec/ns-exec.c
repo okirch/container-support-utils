@@ -363,12 +363,13 @@ run_shell(const char *container_id)
 		exit(1);
 	install_sigwinch_handler();
 
-	/* If the container does not have /dev/pts mounted, tty(1) will print
-	 * "not a tty" when inspecting fd 1, and bash will not believe that it's
-	 * a login shell...
+	/* The ptsname of a pty slave differs between contexts. Currently,
+	 * we are using forkpty(), which makes the slave something like
+	 * pts/42, then change to the container context. In the new context,
+	 * the slave will show up as pts/0 - which confuses the hell out of
+	 * ttyname().
 	 * Workaround: unset HOSTNAME and HOST so that bash at least rebuilds
 	 * PS1.
-	 * Ultimate fix: mount /dev/pts in the shell's namespace.
 	 */
 	unsetenv("HOSTNAME");
 	unsetenv("HOST");
