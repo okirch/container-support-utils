@@ -63,7 +63,7 @@ savelog_dirfd_make_name(const char *pathname)
 }
 
 static int
-savelog_dirfd_open(int dirfd, const char *pathname)
+savelog_dirfd_open(int dirfd, const char *pathname, int modebits)
 {
 	char *outname, *realname, *s;
 	int outfd = -1;
@@ -100,7 +100,7 @@ savelog_dirfd_open(int dirfd, const char *pathname)
 		*s = '/';
 	}
 
-	if ((outfd = openat(dirfd, outname, O_WRONLY|O_CREAT|O_EXCL, 0600)) < 0) {
+	if ((outfd = openat(dirfd, outname, O_WRONLY|O_CREAT| modebits, 0600)) < 0) {
 		log_error("savelog: unable to open \"%s\": %m\n", outname);
 		goto failed;
 	}
@@ -119,6 +119,9 @@ savelog_dirfd_send(struct savelog *savelog, const char *pathname)
 	struct stat stb;
 	off_t offset = 0;
 	int n, rv = -1;
+	int modebits;
+
+	modebits = savelog->overwrite? O_TRUNC : O_EXCL;
 
 	outname = savelog_dirfd_make_name(pathname);
 
@@ -132,9 +135,15 @@ savelog_dirfd_send(struct savelog *savelog, const char *pathname)
 		log_error("savelog: unable to stat \"%s\": %m\n", pathname);
 		goto failed;
 	}
+
+	if (!S_ISREG(stb.st_mode)) {
+		log_error("savelog: ignoring \"%s\": not a regular file\n", pathname);
+		goto failed;
+	}
+
 	size = stb.st_size;
 
-	if ((outfd = savelog_dirfd_open(savelog->fd, pathname)) < 0)
+	if ((outfd = savelog_dirfd_open(savelog->fd, pathname, modebits)) < 0)
 		goto failed;
 
 	while (total < size) {

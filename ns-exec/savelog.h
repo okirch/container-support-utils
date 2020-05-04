@@ -7,12 +7,17 @@
 #ifndef SAVELOG_H
 #define SAVELOG_H
 
+#include <stdbool.h>
+
 /* Server side init */
 extern int		savelog_init(const char *destination);
 
 /* Client side */
 struct savelog {
 	int		fd;
+
+	bool		overwrite;
+
 	int		(*send)(struct savelog *, const char *pathname);
 };
 

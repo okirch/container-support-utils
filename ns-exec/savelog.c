@@ -11,12 +11,14 @@
 #include "tracing.h"
 #include "savelog.h"
 
+static bool	opt_force = false;
+
 static void
 usage(const char *argv0, int exitval)
 {
 	fprintf(stderr,
 		"Usage:\n"
-		"%s <pathname>\n"
+		"%s [-dfh] <pathname>\n"
 		, argv0);
 	exit(exitval);
 }
@@ -26,10 +28,14 @@ parse_options(int argc, char **argv)
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "dh")) != EOF) {
+	while ((c = getopt(argc, argv, "dhf")) != EOF) {
 		switch (c) {
 		case 'd':
 			tracing_enable();
+			break;
+
+		case 'f':
+			opt_force = true;
 			break;
 
 		case 'h':
@@ -58,6 +64,8 @@ main(int argc, char **argv)
 
 	if (!(savelog = savelog_connect()))
 		log_fatal("No savelog facility available in this session\n");
+
+	savelog->overwrite = opt_force;
 
 	while (nameidx < argc) {
 		const char *fname = argv[nameidx++];
