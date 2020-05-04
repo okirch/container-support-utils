@@ -285,7 +285,7 @@ static int
 __container_uts_name(const char *proc_ns_uts_path, char **result)
 {
 	struct utsname uts;
-	int fd;
+	int fd = -1;
 
 	if ((fd = open(proc_ns_uts_path, O_RDONLY)) < 0) {
 		log_error("%s: %m\n", proc_ns_uts_path);
@@ -294,17 +294,22 @@ __container_uts_name(const char *proc_ns_uts_path, char **result)
 
 	if (setns(fd, CLONE_NEWUTS) < 0) {
 		log_warning("Unable to attach to container uts namespace: %m\n");
-		return -1;
+		goto failed;
 	}
 
 	if (uname(&uts) < 0) {
 		log_error("Cannot get uname for container: %m\n");
-		return -1;
+		goto failed;
 	}
 
 	*result = strdup(uts.nodename);
 
+	close(fd);
 	return 0;
+
+failed:
+	close(fd);
+	return -1;
 }
 
 static int
