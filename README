@@ -1,0 +1,28 @@
+
+This project is about utilities that help with diagnosing software
+issues in containers. Rather than rebuilding your container and
+adding lots of stuff to it, you may want to "go to" your container
+the way you log into a server, and strace your application, view
+its log files, fiddle with the config files, etc.
+
+So far, this project contains the following
+
+ ns-exec and savelog
+	ns-exec is a bit like nsenter on (a low dosis of) steroids.
+
+	It can be used to start shell sessions inside a running
+	container. You can mount a host side directory with debugging
+	tools inside this session, and retrieve log files for
+	later analysis.
+
+ sidecar container
+ 	This is still very much WIP. The goal is to have a container
+	image that you can attach to any container you need to
+	debug, and run your diagnostics on it.
+
+ sidecar-console and sidecar-shell
+ 	More of an experiment in combining a remote shell
+	service and the functionality of ns-exec described
+	above. Not very secure yet, and not really recommended
+	for use.
+
