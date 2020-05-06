@@ -188,10 +188,10 @@ io_mainloop(long timeout)
 			break;
 		}
 
+		now = io_timestamp_ms();
 		if (until == 0) {
 			wait_ms = 1000;
 		} else {
-			now = io_timestamp_ms();
 			if (now >= until)
 				return 0;
 			wait_ms = until - now;
