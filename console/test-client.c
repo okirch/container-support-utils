@@ -59,7 +59,7 @@ test_client_get_data(struct endpoint *ep, struct queue *q, struct sender *s)
 		appdata->nsends++;
 
 		if (test_progress)
-			write(1, ".", 1);
+			progress_indicate('.');
 	}
 
 	test_client_timing_update(&appdata->send_timing);
@@ -95,7 +95,7 @@ test_client_push_data(struct endpoint *ep, struct queue *q, struct receiver *r)
 	appdata->nrecvs++;
 
 	if (test_progress)
-		write(1, "+", 1);
+		progress_indicate('+');
 
 	test_client_timing_update(&appdata->recv_timing);
 	return false;
@@ -107,7 +107,7 @@ test_client_close_callback(struct endpoint *ep, void *handle)
 	struct test_client_appdata *appdata = handle;
 
 	if (test_progress)
-		write(1, "\n", 1);
+		progress_indicate('\n');
 
 	test_trace("%s: socket about to be destroyed\n", __func__);
 	appdata->closed = true;

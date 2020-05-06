@@ -21,6 +21,7 @@
 #define _TRACING_H
 
 #include <stdbool.h>
+#include <unistd.h>
 
 extern void		(*__tracing_hook)(const char *fmt, ...);
 
@@ -36,5 +37,11 @@ extern void		log_warning(const char *fmt, ...);
 extern void		log_error(const char *fmt, ...);
 extern void		log_fatal(const char *fmt, ...);
 extern void		logging_notify_raw_tty(bool);
+
+static inline void
+progress_indicate(char c)
+{
+	while (write(1, &c, 1) == 0);
+}
 
 #endif /* _TRACING_H */
