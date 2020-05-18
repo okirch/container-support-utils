@@ -24,6 +24,7 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
+#include <linux/sched.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
