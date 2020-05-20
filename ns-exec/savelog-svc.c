@@ -58,7 +58,9 @@ savelog_dir_init(const char *pathname)
 		fd = 128;
 	}
 
-	snprintf(description, sizeof(description), "%d,%lu/%lu", fd, stb.st_dev, stb.st_ino);
+	snprintf(description, sizeof(description), "%d,%Lu/%lu", fd,
+			(unsigned long long) stb.st_dev, /* on some architectures, dev_t is a long long */
+			stb.st_ino);
 	setenv("SAVELOG_DIRFD", description, 1);
 	trace("Exporting SAVELOG_DIRFD=\"%s\"\n", description);
 
