@@ -48,8 +48,8 @@ extern void		buf_consumed(struct buf **list, unsigned long amount);
 
 extern void		queue_init(struct queue *);
 extern void		queue_destroy(struct queue *);
-extern size_t		queue_available(const struct queue *);
-extern size_t		queue_tailroom(const struct queue *);
+extern unsigned long	queue_available(const struct queue *);
+extern unsigned long	queue_tailroom(const struct queue *);
 extern bool		queue_full(const struct queue *);
 extern void		queue_append(struct queue *, const void *, size_t);
 extern const void *	queue_get(struct queue *q, void *p, size_t count);

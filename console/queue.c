@@ -58,13 +58,13 @@ queue_destroy(struct queue *q)
 	}
 }
 
-size_t
+unsigned long
 queue_available(const struct queue *q)
 {
 	return q->size;
 }
 
-size_t
+unsigned long
 queue_tailroom(const struct queue *q)
 {
 	return QUEUE_SZ - q->size;

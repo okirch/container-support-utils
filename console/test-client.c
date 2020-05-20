@@ -87,7 +87,7 @@ test_client_push_data(struct endpoint *ep, struct queue *q, struct receiver *r)
 	assert(q == r->recvq);
 
 	recv_sz = queue_available(q);
-	test_trace("%s: %lu bytes of data available\n", __func__, recv_sz);
+	test_trace("%s: %lu bytes of data available\n", __func__, (unsigned long) recv_sz);
 
 	if (appdata->random_recv)
 		recv_sz = test_random_size(recv_sz);
