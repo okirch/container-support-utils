@@ -22,10 +22,12 @@ LIBSRCS		= shellproto.c \
 		  buffer.c \
 		  tracing.c
 LIBOBJS		= $(LIBSRCS:.c=.o)
+PIC_LIB		= libconsole-pic.a
+PIC_LIBOBJS	= $(addprefix pic/,$(LIBOBJS))
 LINK		= -L. -lconsole -lutil
 
 
-all: $(TESTAPPS) $(CONSOLE) $(CLIENT)
+all: $(TESTAPPS) $(CONSOLE) $(CLIENT) $(PIC_LIB)
 
 tests:	$(TESTAPPS)
 	@set -e; for t in $(TESTAPPS); do \
@@ -36,6 +38,7 @@ tests:	$(TESTAPPS)
 clean:
 	rm -f $(CONSOLE) $(CLIENT) $(TESTAPPS)
 	rm -f *.o *.a
+	rm -rf pic/
 
 install: $(CONSOLE) $(CLIENT)
 	@case $(DESTDIR) in \
@@ -48,6 +51,9 @@ install: $(CONSOLE) $(CLIENT)
 
 $(LIB): $(LIBOBJS)
 	$(AR) crv $@ $(LIBOBJS)
+
+$(PIC_LIB): $(PIC_LIBOBJS)
+	$(AR) crv $@ $(PIC_LIBOBJS)
 
 test-queue: test-queue.o $(TESTOBJS) $(LIB)
 	$(CC) $(CFLAGS) -o $@ test-queue.o $(TESTOBJS) $(LINK)
@@ -64,9 +70,14 @@ sidecar-console: sidecar-console.o $(LIB)
 sidecar-shell: sidecar-shell.o $(LIB)
 	$(CC) $(CFLAGS) -o $@ sidecar-shell.o $(LINK)
 
+pic/%.o: %.c
+	@mkdir -p pic
+	$(CC) $(CFLAGS) -fPIC -c -o $@ $<
+
 ifeq ($(wildcard .depend), .depend)
 include .depend
 endif
 
 depend:
 	gcc -I. -MM *.c >.depend
+	gcc -I. -MM *.c | sed 's:^[^ ]:pic/&:' >>.depend
