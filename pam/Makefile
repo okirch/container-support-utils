@@ -1,4 +1,4 @@
-LIBDIR		= /lib64/security
+PAMLIBDIR	= /lib64/security
 MANDIR		= /usr/share/man/man8
 
 COPT		= -g
@@ -24,8 +24,8 @@ install: $(PAM_CONTAINER)
 	""|/*) ;; \
 	*) echo "DESTDIR is a relative path, no workie" >&2; exit 2;; \
 	esac
-	install -m 755 -d $(DESTDIR)$(LIBDIR)
-	install -m 555 $(PAM_CONTAINER) $(DESTDIR)$(LIBDIR)
+	install -m 755 -d $(DESTDIR)$(PAMLIBDIR)
+	install -m 555 $(PAM_CONTAINER) $(DESTDIR)$(PAMLIBDIR)
 ifneq ($(MANPAGES),)
 	install -m 755 -d $(DESTDIR)$(MANDIR)
 	install -m 444 $(MANPAGES) $(DESTDIR)$(MANDIR)
