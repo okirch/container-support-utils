@@ -1,0 +1,44 @@
+
+pam_container
+
+This is a Linux PAM module that provides a session function to
+enter an existing container.
+
+Configuration options (via pam argv list):
+
+    1. How to select a container. The default is "auto", which
+       will pick any container that is visible to the process.
+       This is mostly useful for sidecar containers, where you
+       know there is only one other container.
+
+       Alternatively, there is "user" mode. In this mode,
+       the module tries to attach to a container named
+       user:$USERNAME, where $USERNAME is the name of the user
+       being logged in.
+
+    2. User policy. By default, pam_container will try to place
+       each and every user into a container.
+
+       You can tune this behavior by specifying user_apply=
+       and user_ignore= options. For example, the following
+       will try to place all users EXCEPT root in a container:
+
+	user_ignore=root
+
+       Alternatively, you may want to place ONLY gollum in
+       a container, in which case you would use this:
+
+	user_apply=gollum user_ignore=all
+
+
+CAVEAT: Not all applications check the return value of
+pam_open_session() or if they do, they may ignore it.  OpenSSH seems
+to behave this way. In such a case, a failure of the pam_container
+session management means that the user will be given a session in
+the host context.
+
+
+
+TODO:
+ Option to export additional directories to the session, just like
+ ns-exec supports.

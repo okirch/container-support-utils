@@ -15,6 +15,11 @@ So far, this project contains the following
 	tools inside this session, and retrieve log files for
 	later analysis.
 
+ pam_container
+	A Linux PAM module that you can use to automatically
+	place login/ssh sessions etc within an existing container.
+	For details, see README.pam
+
  sidecar container
  	This is still very much WIP. The goal is to have a container
 	image that you can attach to any container you need to
