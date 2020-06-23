@@ -1,7 +1,7 @@
 SUBDIRS		= console ns-exec pam sidecar
 
 all clean install::
-	@for d in $(SUBDIRS); do make -C $$d $@; done
+	@set -e; for d in $(SUBDIRS); do make -C $$d $@; done
 
 archive:
 	@tag=$$(git tag --sort=-taggerdate | head -1); \
