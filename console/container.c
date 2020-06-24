@@ -106,7 +106,7 @@ container_has_command(const struct container *con, const char *command)
 }
 
 static bool
-shell_is_namespace_member(int procfd, const char *name)
+self_already_in_namespace(int procfd, const char *name)
 {
 	char pathbuf[PATH_MAX];
 	struct stat stb1, stb2;
@@ -154,7 +154,7 @@ container_attach(const struct container *con)
 		ns->fd = -1;
 
 	for (ns = nsnames; ns->name; ++ns) {
-		if (shell_is_namespace_member(con->procfd, ns->name)) {
+		if (self_already_in_namespace(con->procfd, ns->name)) {
 			/* no need to join, we're already in the same club */
 		} else if ((ns->fd = openat(con->procfd, ns->name, O_RDONLY)) < 0) {
 			log_error("Unable to open namespace %s: %m.\n", ns->name);
