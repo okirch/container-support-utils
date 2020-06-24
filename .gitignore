@@ -3,6 +3,7 @@
 *.tar
 *.o
 *.a
+*.so
 sidecar-console
 sidecar-shell
 test-queue
