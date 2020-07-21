@@ -4,7 +4,7 @@ MANDIR		= /usr/share/man/man1
 COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I../console $(COPT)
 WORMHOLE	= wormhole
-WORMHOLE_SRCS	= wormhole.c
+WORMHOLE_SRCS	= wormhole.c profiles.c
 WORMHOLE_OBJS	= $(WORMHOLE_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
