@@ -22,6 +22,7 @@
 #define _WORMHOLE_UTIL_H
 
 
+extern const char *		const_basename(const char *path);
 extern const char *		concat_argv(int argc, char **argv);
 
 #endif // _WORMHOLE_UTIL_H

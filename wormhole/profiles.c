@@ -81,14 +81,11 @@ struct profile *
 profile_find(const char *argv0)
 {
 	struct profile *profile;
-	char *fullname;
-	char *name;
+	const char *name;
 
-	fullname = strdup(argv0);
-
-	name = basename(fullname);
+	name = const_basename(argv0);
 	if (name == NULL || *name == '\0') {
-		fprintf(stderr, "Cannot detect basename of executable\n");
+		log_error("Cannot detect basename of executable");
 		return NULL;
 	}
 

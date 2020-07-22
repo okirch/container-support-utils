@@ -68,3 +68,22 @@ concat_argv(int argc, char **argv)
 
 	return buffer;
 }
+
+const char *
+const_basename(const char *path)
+{
+	const char *s;
+
+	if (path == NULL)
+		return NULL;
+
+	s = strrchr(path, '/');
+	if (s == NULL)
+		return path;
+
+	/* Path ends with a slash */
+	if (s[1] == '\0')
+		return NULL;
+
+	return &s[1];
+}
