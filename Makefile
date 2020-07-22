@@ -1,4 +1,4 @@
-SUBDIRS		= console ns-exec pam sidecar
+SUBDIRS		= console wormhole ns-exec pam sidecar
 
 all clean install::
 	@set -e; for d in $(SUBDIRS); do make -C $$d $@; done
