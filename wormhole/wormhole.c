@@ -133,12 +133,19 @@ wormhole_daemon(int argc, char **argv)
 	struct sockaddr_un sun;
 	int fd;
 
+	/* Drop uid/gid back to those of the calling user. */
+	setgid(getgid());
+	setuid(getuid());
+
 	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
 		return 1;
 	}
 
-	unlink(WORMHOLE_SOCKET_PATH);
+	if (unlink(WORMHOLE_SOCKET_PATH) < 0) {
+		perror("unlink(" WORMHOLE_SOCKET_PATH ")");
+		return 1;
+	}
 
 	memset(&sun, 0, sizeof(sun));
 	sun.sun_family = AF_LOCAL;
