@@ -523,7 +523,7 @@ pathinfo_bind_children(struct profile *profile, struct path_info *pi, const char
 		if (d->d_name[0] == '.' && (d->d_name[1] == '\0' || d->d_name[1] == '.'))
 			continue;
 
-		printf("Trying to mount %s from %s to %s\n", d->d_name, source, pi->path);
+		/* printf("Trying to mount %s from %s to %s\n", d->d_name, source, pi->path); */
 		snprintf(source_entry, sizeof(source_entry), "%s/%s", source, d->d_name);
 		snprintf(target_entry, sizeof(target_entry), "%s/%s", pi->path, d->d_name);
 
