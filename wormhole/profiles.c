@@ -55,6 +55,23 @@ static struct profile		dummy_profiles[] = {
 			// PATH_INFO_REPLACE("/usr/lib64/ruby"),
 			PATH_INFO_REPLACE("/usr/share/YaST2"),
 			PATH_INFO_REPLACE("/var/log/YaST2"),
+
+			/* mount the wormhole client binary on /usr/bin/zypper so that
+			 * zypper runs in the host context. */
+			PATH_INFO_WORMHOLE("/usr/bin/zypper"),
+			/* Same for rpm */
+			PATH_INFO_WORMHOLE("/usr/bin/rpm"),
+		},
+	},
+	{
+		.name =			"zypper",
+		.command =		"/usr/bin/zypper",
+		/* No container, not path info - execute this in the root context */
+	},
+	{
+		.name =			"rpm",
+		.command =		"/usr/bin/rpm",
+		/* No container, not path info - execute this in the root context */
 	},
 	{ NULL }
 };
@@ -593,6 +610,10 @@ profile_setup(struct profile *profile)
 {
 	struct path_info *pi;
 	struct stat stb1, stb2;
+
+	/* No image means: execute command in the host context */
+	if (!profile->container_image)
+		return 0;
 
 	if (!profile_mount(profile))
 		return -1;

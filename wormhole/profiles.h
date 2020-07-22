@@ -29,6 +29,7 @@ struct path_info {
 #define PATH_INFO_HIDE(n)	{ .path = n, .replace = NULL }
 #define PATH_INFO_REPLACE(n)	{ .path = n, .replace = "$ROOT" n }
 #define PATH_INFO_REPLACE_CHILDREN(n)	{ .path = n, .replace = "$ROOT" n "/*" }
+#define PATH_INFO_WORMHOLE(n)	{ .path = n, .replace = "/usr/bin/wormhole" }
 
 struct profile {
 	char *			name;
