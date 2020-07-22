@@ -39,6 +39,7 @@
 
 #include "tracing.h"
 #include "profiles.h"
+#include "util.h"
 
 #define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
 
@@ -271,11 +272,9 @@ wormhole_client(int argc, char **argv)
 		fprintf(stderr, "No argv[0]. How come?\n");
 		return 2;
 	}
-	if (1) {
-		int i;
-		for (i = 0; i < argc; ++i)
-			printf("argv[%d] = %s\n", i, argv[i]);
-	}
+
+	if (1)
+		printf("Executed as: %s\n", concat_argv(argc, argv));
 
 	fd = socket(PF_LOCAL, SOCK_STREAM, 0);
 	if (fd < 0) {

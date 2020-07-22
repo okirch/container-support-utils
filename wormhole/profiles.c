@@ -37,6 +37,7 @@
 
 #include "tracing.h"
 #include "profiles.h"
+#include "util.h"
 
 static struct profile		dummy_profiles[] = {
 	{
@@ -131,6 +132,9 @@ podman_exec(char **argv, int *fdp)
 {
 	int pfd[2];
 	pid_t pid;
+
+	if (true)
+		log_debug("About to run: %s", concat_argv(-1, argv));
 
 	if (fdp == NULL) {
 		pid = fork();
