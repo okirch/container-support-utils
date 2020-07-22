@@ -21,7 +21,7 @@ clean:
 	rm -f *.o *.a
 
 install: $(NSEXEC)
-	@case $(DESTDIR) in \
+	@case "$(DESTDIR)" in \
 	""|/*) ;; \
 	*) echo "DESTDIR is a relative path, no workie" >&2; exit 2;; \
 	esac

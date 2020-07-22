@@ -41,7 +41,7 @@ clean:
 	rm -rf pic/
 
 install: $(CONSOLE) $(CLIENT)
-	@case $(DESTDIR) in \
+	@case "$(DESTDIR)" in \
 	""|/*) ;; \
 	*) echo "DESTDIR is a relative path, no workie" >&2; exit 2;; \
 	esac
