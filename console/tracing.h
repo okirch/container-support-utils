@@ -31,8 +31,11 @@ extern void		(*__tracing_hook)(const char *fmt, ...);
 	} while (0)
 
 extern bool		set_logfile(const char *filename);
+extern void		set_syslog(const char *name, int facility);
 extern void		tracing_enable(void);
 
+extern void		log_debug(const char *fmt, ...);
+extern void		log_info(const char *fmt, ...);
 extern void		log_warning(const char *fmt, ...);
 extern void		log_error(const char *fmt, ...);
 extern void		log_fatal(const char *fmt, ...);

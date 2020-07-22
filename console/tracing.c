@@ -20,6 +20,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <syslog.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,6 +38,7 @@ void		(*__tracing_hook)(const char *fmt, ...);
 
 static FILE *	logfile = NULL;
 static bool	logging_to_tty = false;
+static bool	logging_to_syslog = false;
 static bool	logging_raw_tty = false;
 
 static FILE *
@@ -51,16 +53,6 @@ __get_logf(void)
 		logging_to_tty = isatty(fd);
 	}
 	return logfile;
-}
-
-static void
-__trace_logfile(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vfprintf(__get_logf(), fmt, ap);
-	va_end(ap);
 }
 
 /*
@@ -92,13 +84,66 @@ __log_format(const char *fmt, va_list ap)
 
 	/* When logging to a tty in raw mode, there is no automatic CRLF
 	 * translation. fudge it. */
-	if (logging_to_tty && logging_raw_tty) {
+	if (logging_to_tty) {
 		int n = strlen(fmt);
-		if (n && fmt[n-1] == '\n')
-			fputc('\r', f);
+
+		if (n) {
+			if (fmt[n-1] != '\n')
+				fputc('\n', f);
+			if (logging_raw_tty)
+				fputc('\r', f);
+		}
 	}
 	if (logging_to_tty)
 		fflush(f);
+}
+
+static void
+__log_message(int level, const char *fmt, va_list ap)
+{
+	if (logging_to_syslog) {
+		/* LOG_EMERG indicates that this is a fatal error (for us) */
+		if (level == LOG_EMERG)
+			level = LOG_ERR;
+		vsyslog(level, fmt, ap);
+	} else {
+		switch (level) {
+		case LOG_EMERG:
+			__log_prefix("Fatal error: ");
+			break;
+		case LOG_ERR:
+			__log_prefix("Error: ");
+			break;
+		case LOG_WARNING:
+			__log_prefix("Warning: ");
+			break;
+		case LOG_INFO:
+		case LOG_DEBUG:
+		default:
+			/* nothing */ ;
+		}
+		__log_format(fmt, ap);
+	}
+}
+
+void
+log_debug(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	__log_message(LOG_DEBUG, fmt, ap);
+	va_end(ap);
+}
+
+void
+log_info(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	__log_message(LOG_INFO, fmt, ap);
+	va_end(ap);
 }
 
 void
@@ -107,8 +152,7 @@ log_warning(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	__log_prefix("Warning: ");
-	__log_format(fmt, ap);
+	__log_message(LOG_WARNING, fmt, ap);
 	va_end(ap);
 }
 
@@ -118,8 +162,7 @@ log_error(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	__log_prefix("Error: ");
-	__log_format(fmt, ap);
+	__log_message(LOG_ERR, fmt, ap);
 	va_end(ap);
 }
 
@@ -129,11 +172,17 @@ log_fatal(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	__log_prefix("Fatal error: ");
-	__log_format(fmt, ap);
+	__log_message(LOG_EMERG, fmt, ap);
 	va_end(ap);
 
 	exit(1);
+}
+
+void
+set_syslog(const char *name, int facility)
+{
+	openlog(name, 0, facility);
+	logging_to_syslog = true;
 }
 
 bool
@@ -161,7 +210,7 @@ set_logfile(const char *filename)
 void
 tracing_enable(void)
 {
-	__tracing_hook = __trace_logfile;
+	__tracing_hook = log_debug;
 }
 
 void
