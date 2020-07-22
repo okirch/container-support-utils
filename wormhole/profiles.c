@@ -38,28 +38,31 @@
 #include "tracing.h"
 #include "profiles.h"
 
-static struct profile		dummy_ps_profile = {
-	.name =			"ps",
-	.command =		"/usr/bin/ps",
-};
-static struct profile		dummy_yast2_profile = {
-	.name =			"yast2",
-	.command =		"/sbin/yast2",
-	.container_image =	"okir/yast-testing",
-
-	.path_info = {
-		PATH_INFO_REPLACE("/usr/lib/perl5"),
-		PATH_INFO_REPLACE("/usr/lib/YaST2"),
-		PATH_INFO_REPLACE_CHILDREN("/usr/lib64"),
-		// PATH_INFO_REPLACE("/usr/lib64/ruby"),
-		PATH_INFO_REPLACE("/usr/share/YaST2"),
-		PATH_INFO_REPLACE("/var/log/YaST2"),
+static struct profile		dummy_profiles[] = {
+	{
+		.name =			"ps",
+		.command =		"/usr/bin/ps",
 	},
+	{
+		.name =			"yast2",
+		.command =		"/sbin/yast2",
+		.container_image =	"okir/yast-testing",
+
+		.path_info = {
+			PATH_INFO_REPLACE("/usr/lib/perl5"),
+			PATH_INFO_REPLACE("/usr/lib/YaST2"),
+			PATH_INFO_REPLACE_CHILDREN("/usr/lib64"),
+			// PATH_INFO_REPLACE("/usr/lib64/ruby"),
+			PATH_INFO_REPLACE("/usr/share/YaST2"),
+			PATH_INFO_REPLACE("/var/log/YaST2"),
+	},
+	{ NULL }
 };
 
 struct profile *
 profile_find(const char *argv0)
 {
+	struct profile *profile;
 	char *fullname;
 	char *name;
 
@@ -71,10 +74,10 @@ profile_find(const char *argv0)
 		return NULL;
 	}
 
-	if (!strcmp(name, "ps"))
-		return &dummy_ps_profile;
-	if (!strcmp(name, "yast2"))
-		return &dummy_yast2_profile;
+	for (profile = dummy_profiles; profile->name; ++profile) {
+		if (!strcmp(name, profile->name))
+			return profile;
+	}
 
 	return NULL;
 }
