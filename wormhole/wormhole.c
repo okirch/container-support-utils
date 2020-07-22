@@ -38,7 +38,7 @@
 #include <errno.h>
 
 #include "tracing.h"
-#include "profiles.h"
+#include "wormhole.h"
 #include "util.h"
 
 #define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
