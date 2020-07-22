@@ -143,11 +143,6 @@ wormhole_daemon(int argc, char **argv)
 	struct sockaddr_un sun;
 	int fd;
 
-	if (argc != 1) {
-		fprintf(stderr, "bad additional arguments.\n");
-		return 2;
-	}
-
 	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
 		return 1;
