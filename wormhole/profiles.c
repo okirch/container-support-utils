@@ -286,7 +286,7 @@ podman_container_exists(const char *name)
 static bool
 podman_start(const char *image_spec, const char *container_name)
 {
-	return podman_run("create", "--name", container_name, image_spec);
+	return podman_run("create", "--name", container_name, image_spec, NULL);
 }
 
 static const char *
