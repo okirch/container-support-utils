@@ -648,26 +648,16 @@ profile_setup(struct profile *profile)
 		fprintf(stderr, "Something is not quite right\n");
 		return -1;
 	}
+#if 0
 	printf("namespace before 0x%lx/%ld -> 0x%lx/%ld\n",
 			stb1.st_dev, stb1.st_ino,
 			stb2.st_dev, stb2.st_ino);
-
-	/* exit(999); */
+#endif
 
 	for (pi = profile->path_info; pi->path; ++pi) {
-		// dump_mtab("before mount");
 		if (pathinfo_process(profile, pi) < 0)
 			return -1;
-		// dump_mtab("after mount");
-		// return -1;
 	}
-
-	if (access("/usr/lib64/libQt5Core.so.5.9", F_OK) < 0)
-		perror("/usr/lib64/libQt5Core.so.5.9");
-	if (access("/usr/lib64/libsnapper.so.4", F_OK) < 0)
-		perror("/usr/lib64/libsnapper.so.4");
-	if (access("/usr/share/YaST2/clients/snapper.rb", F_OK) < 0)
-		perror("/usr/share/YaST2/clients/snapper.rb");
 
 	return 0;
 }
