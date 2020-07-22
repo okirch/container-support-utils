@@ -137,60 +137,6 @@ wormhole_direct(int argc, char **argv)
 	return 12;
 }
 
-static bool	opt_log_syslog = false;
-
-void
-wormhole_openlog(void)
-{
-	openlog("wormholed", 0, LOG_DAEMON);
-	opt_log_syslog = true;
-}
-
-static void
-__wormhole_do_log(int level, const char *fmt, va_list ap)
-{
-	if (opt_log_syslog) {
-		vsyslog(level, fmt, ap);
-	} else {
-		FILE *fp;
-
-		fp = (level <= LOG_WARNING)? stderr : stdout;
-		vfprintf(fp, fmt, ap);
-		fputs("\n", fp);
-	}
-}
-
-static void
-wormhole_daemon_info(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	__wormhole_do_log(LOG_INFO, fmt, ap);
-	va_end(ap);
-}
-
-static void
-wormhole_daemon_error(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	__wormhole_do_log(LOG_ERR, fmt, ap);
-	va_end(ap);
-}
-
-static void
-wormhole_daemon_fatal(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	__wormhole_do_log(LOG_ERR, fmt, ap);
-	va_end(ap);
-	exit(1);
-}
-
 int
 wormhole_daemon(int argc, char **argv)
 {
@@ -225,7 +171,7 @@ wormhole_daemon(int argc, char **argv)
 	}
 
 	if (!opt_foreground) {
-		wormhole_openlog();
+		set_syslog("wormholed", LOG_DAEMON);
 		if (daemon(false, false) < 0) {
 			perror("listen");
 			return 1;
@@ -238,7 +184,7 @@ wormhole_daemon(int argc, char **argv)
 
 		cfd = accept(fd, NULL, NULL);
 		if (cfd < 0) {
-			wormhole_daemon_error("failed to accept incoming connection: %m");
+			log_error("failed to accept incoming connection: %m");
 			continue;
 		}
 
@@ -249,7 +195,7 @@ wormhole_daemon(int argc, char **argv)
 		}
 
 		if (pid < 0)
-			wormhole_daemon_error("failed to fork child process: %m");
+			log_error("failed to fork child process: %m");
 		close(cfd);
 	}
 
@@ -273,19 +219,19 @@ wormhole_process_connection(int fd)
 	alarm(5);
 
 	if ((n = recv(fd, namebuf, sizeof(namebuf) - 1, 0)) < 0)
-		wormhole_daemon_fatal("recv: %m");
+		log_fatal("recv: %m");
 	namebuf[n] = '\0';
 
 	profile = profile_find(namebuf);
 	if (profile == NULL)
-		wormhole_daemon_fatal("no profile for %s", namebuf);
+		log_fatal("no profile for %s", namebuf);
 
 	if (profile_setup(profile) < 0)
-		wormhole_daemon_fatal("Failed to set up environment for %s", profile->name);
+		log_fatal("Failed to set up environment for %s", profile->name);
 
 	nsfd = open("/proc/self/ns/mnt", O_RDONLY);
 	if (nsfd < 0)
-		wormhole_daemon_fatal("Cannot open /proc/self/ns/mnt: %m");
+		log_fatal("Cannot open /proc/self/ns/mnt: %m");
 
 	memset(&iov, 0, sizeof(iov));
 	iov.iov_base = profile->command;
@@ -306,9 +252,9 @@ wormhole_process_connection(int fd)
 	msg.msg_controllen = CMSG_SPACE(sizeof(int));
 
 	if (sendmsg(fd, &msg, 0) < 0)
-		wormhole_daemon_fatal("sendmsg: %m");
+		log_fatal("sendmsg: %m");
 
-	wormhole_daemon_info("served request for a \"%s\" namespace", profile->name);
+	log_info("served request for a \"%s\" namespace", profile->name);
 	return;
 }
 
