@@ -53,25 +53,32 @@ struct option wormhole_options[] = {
 
 static bool			opt_foreground = false;
 
-static int			wormhole_direct(int argc, char **argv);
-static int			wormhole_client(int argc, char **argv);
-static int			wormhole_daemon(int argc, char **argv);
 static void			wormhole_process_connection(int fd);
-
-static int			frob_arguments(int, char **, int);
 
 int
 main(int argc, char **argv)
 {
-	int (*fn)(int, char **) = wormhole_client;
-	bool need_to_frob = false;
+	const char *basename;
+	int (*fn)(int, char **);
 	int c;
 
+	/* Someone trying to invoke us without argv0 doesn't deserve
+	 * an error message. */
+	if (argc == 0)
+		return 2;
+
+	basename = const_basename(argv[0]);
+	if (basename == NULL)
+		return 2;
+
+	if (strcmp(basename, "wormhole") != 0)
+		return wormhole_client(argc, argv);
+
+	fn = wormhole_client;
 	while ((c = getopt_long(argc, argv, "", wormhole_options, NULL)) != EOF) {
 		switch (c) {
 		case 'C':
 			fn = wormhole_client;
-			need_to_frob = true;
 			break;
 		case 'D':
 			fn = wormhole_daemon;
@@ -81,7 +88,6 @@ main(int argc, char **argv)
 			break;
 		case 'N':
 			fn = wormhole_direct;
-			need_to_frob = true;
 			break;
 
 		default:
@@ -90,20 +96,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (need_to_frob)
-		argc = frob_arguments(argc, argv, optind);
-	return fn(argc, argv);
-}
-
-int
-frob_arguments(int argc, char **argv, int optind)
-{
-	int i;
-
-	for (i = 1; optind < argc; ++i, ++optind)
-		argv[i] = argv[optind];
-	argv[i] = NULL;
-	return i;
+	return fn(argc - optind, argv + optind);
 }
 
 int
@@ -111,10 +104,6 @@ wormhole_direct(int argc, char **argv)
 {
 	struct profile *profile;
 
-	if (argc == 0) {
-		fprintf(stderr, "sneaky invocation detected. countermeasures initiated.\n");
-		return 2;
-	}
 
 	profile = profile_find(argv[0]);
 	if (profile == NULL) {
@@ -165,6 +154,8 @@ wormhole_daemon(int argc, char **argv)
 		perror("listen");
 		return 1;
 	}
+
+	log_info("wormhole daemon: listening on %s", WORMHOLE_SOCKET_PATH);
 
 	if (!opt_foreground) {
 		set_syslog("wormholed", LOG_DAEMON);
@@ -267,11 +258,6 @@ wormhole_client(int argc, char **argv)
 		char buf[1024];
 	} u;
 	int fd, nsfd = -1;
-
-	if (argc == 0) {
-		fprintf(stderr, "No argv[0]. How come?\n");
-		return 2;
-	}
 
 	if (1)
 		printf("Executed as: %s\n", concat_argv(argc, argv));
