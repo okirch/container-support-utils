@@ -42,8 +42,6 @@ struct profile {
 extern struct profile *		profile_find(const char *argv0);
 extern int			profile_setup(struct profile *);
 
-extern int			wormhole_direct(int argc, char **argv);
 extern int			wormhole_client(int argc, char **argv);
-extern int			wormhole_daemon(int argc, char **argv);
 
 #endif // _WORMHOLE_PROFILES_H
