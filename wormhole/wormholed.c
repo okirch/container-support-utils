@@ -212,14 +212,6 @@ wormhole_daemon(int argc, char **argv)
 	return 0;
 }
 
-void
-wormhole_incoming_connection(struct wormhole_socket *new_sock)
-{
-	wormhole_install_socket(new_sock);
-}
-
-#include <netinet/in.h>
-
 bool
 wormhole_message_consume(struct wormhole_socket *s, struct buf *bp)
 {
@@ -294,15 +286,6 @@ wormhole_enqueue_request_pending(struct wormhole_request *req)
 	wormhole_request_list_insert(&wormhole_pending_requests, req);
 }
 
-static struct buf *
-wormhole_build_status(const struct wormhole_request *req, unsigned int status)
-{
-	uint32_t status32;
-
-	status32 = htonl(status);
-	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &status32, sizeof(status32));
-}
-
 static bool
 __wormhole_socket_send_with_fd(struct wormhole_socket *s, struct buf *bp, int fd)
 {
@@ -350,7 +333,7 @@ wormhole_send_response_with_fd(const struct wormhole_request *req, int fd)
 	if (s == NULL)
 		return;
 
-	bp = wormhole_build_status(req, WORMHOLE_STATUS_OK);
+	bp = wormhole_message_build_status(WORMHOLE_STATUS_OK);
 	if (!__wormhole_socket_send_with_fd(s, bp, fd)) {
 		/* Mark socket for closing */
 	}
@@ -368,7 +351,7 @@ wormhole_send_status(struct wormhole_request *req, int status)
 		return;
 
 	assert(s->sendbuf == NULL);
-	s->sendbuf = wormhole_build_status(req, status);
+	s->sendbuf = wormhole_message_build_status(status);
 
 	req->reply_sent = true;
 }

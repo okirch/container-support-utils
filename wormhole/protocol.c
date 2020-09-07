@@ -44,6 +44,15 @@ wormhole_message_build(int opcode, const void *payload, size_t payload_len)
 	return bp;
 }
 
+struct buf *
+wormhole_message_build_status(unsigned int status)
+{
+	uint32_t status32;
+
+	status32 = htonl(status);
+	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &status32, sizeof(status32));
+}
+
 bool
 wormhole_message_dissect(struct buf *bp, struct wormhole_message *msg, const void **payloadp)
 {
