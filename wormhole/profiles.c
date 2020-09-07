@@ -114,7 +114,7 @@ podman_build_cmd(const char *subcmd, va_list ap)
 
 	while ((s = va_arg(ap, char *)) != NULL) {
 		if (i + 2 >= PODMAN_MAX_ARGS) {
-			fprintf(stderr, "Too many arguments to podman\n");
+			log_error("Too many arguments to podman");
 			return NULL;
 		}
 		argv[i++] = s;
@@ -136,24 +136,24 @@ podman_exec(char **argv, int *fdp)
 	if (fdp == NULL) {
 		pid = fork();
 		if (pid < 0) {
-			perror("podman fork");
+			log_error("podman fork: %m");
 			return -1;
 		}
 
 		if (pid == 0) {
 			execvp("podman", argv);
-			perror("Cannot execute podman");
+			log_error("Cannot execute podman: %m");
 			exit(5);
 		}
 	} else {
 		if (pipe(pfd) < 0) {
-			perror("podman pipe");
+			log_error("podman pipe: %m");
 			return -1;
 		}
 
 		pid = fork();
 		if (pid < 0) {
-			perror("podman fork");
+			log_error("podman fork: %m");
 			close(pfd[0]);
 			close(pfd[1]);
 			return -1;
@@ -164,7 +164,7 @@ podman_exec(char **argv, int *fdp)
 			dup2(pfd[1], 1);
 			dup2(pfd[1], 2);
 			execvp("podman", argv);
-			perror("Cannot execute podman");
+			log_error("Cannot execute podman: %m");
 			exit(5);
 		}
 
@@ -199,10 +199,10 @@ podman_read_response(int fd)
 	while (fgets(more, sizeof(more), fp)) {
 		if (chop(more)) {
 			if (first) {
-				fprintf(stderr, "Warning; additional output from podman:\n");
+				log_error("Warning; additional output from podman:");
 				first = false;
 			}
-			fprintf(stderr, "%s\n", more);
+			log_error("%s", more);
 		}
 	}
 
@@ -216,18 +216,18 @@ podman_wait(pid_t pid)
 	int status;
 
 	while (waitpid(pid, &status, 0) < 0) {
-		perror("podman waitpid");
+		log_error("podman waitpid: %m");
 		if (errno == ECHILD)
 			return -1;
 	}
 
 	if (WIFSIGNALED(status)) {
-		fprintf(stderr, "podman command crashed with signal %d\n", WTERMSIG(status));
+		log_error("podman command crashed with signal %d", WTERMSIG(status));
 		return -1;
 	}
 
 	if (!WIFEXITED(status)) {
-		fprintf(stderr, "something happened to podman command - status %d\n", status);
+		log_error("something happened to podman command - status %d", status);
 		return -1;
 	}
 
@@ -262,7 +262,7 @@ podman_run_and_capture(char *subcmd, ...)
 		return NULL;
 
 	if (exitcode != 0) {
-		fprintf(stderr, "podman %s exited with non-zero status %d\n", subcmd, exitcode);
+		log_error("podman %s exited with non-zero status %d", subcmd, exitcode);
 		return NULL;
 	}
 
@@ -323,11 +323,11 @@ profile_make_local_name(struct profile *profile)
 	char *s;
 
 	if (!profile->container_image) {
-		fprintf(stderr, "Profile \"%s\" does not have a container image defined\n", profile->name);
+		log_error("Profile \"%s\" does not have a container image defined", profile->name);
 		return NULL;
 	}
 	if (strlen(profile->container_image) >= sizeof(local_buf)) {
-		fprintf(stderr, "Profile \"%s\": image name \"%s\" is too long\n", profile->name, profile->container_image);
+		log_error("Profile \"%s\": image name \"%s\" is too long", profile->name, profile->container_image);
 		return NULL;
 	}
 
@@ -377,7 +377,7 @@ dump_mtab(const char *msg)
 	printf("== mtab %s ==", msg);
 	fp = fopen("/proc/mounts", "r");
 	if (fp == NULL) {
-		perror("/proc/mounts");
+		log_error("Unable to open /proc/mounts: %m");
 		exit(7);
 	}
 
@@ -444,12 +444,12 @@ fsutil_tempdir_cleanup(struct fsutil_tempdir *td)
 		return 0;
 
 	if (td->mounted && umount(td->path) < 0) {
-                log_error("Unable to unmount %s: %m\n", td->path);
+                log_error("Unable to unmount %s: %m", td->path);
 		return -1;
         }
 
         if (rmdir(td->path) < 0) {
-                log_error("Unable to remove temporary mountpoint %s: %m\n", td->path);
+                log_error("Unable to remove temporary mountpoint %s: %m", td->path);
 		return -1;
         }
 
@@ -462,11 +462,11 @@ static int
 _pathinfo_bind_one(struct profile *profile, const char *source, const char *target)
 {
 	if (mount(source, target, NULL, MS_BIND, NULL) < 0) {
-		fprintf(stderr, "%s: unable to bind mount %s to %s: %m\n", profile->name, source, target);
+		log_error("%s: unable to bind mount %s to %s: %m", profile->name, source, target);
 		return -1;
 	}
 
-	fprintf(stderr, "%s: bind mounted %s to %s\n", profile->name, source, target);
+	log_error("%s: bind mounted %s to %s", profile->name, source, target);
 	return 0;
 }
 
@@ -487,15 +487,15 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 	snprintf(work, sizeof(work), "%s/work", tempdir);
 
 	if (symlink(where, lower) < 0) {
-		log_error("symlink(%s, %s): %m\n", where, lower);
+		log_error("symlink(%s, %s): %m", where, lower);
 		return -1;
 	}
 	if (mkdir(upper, 0755) < 0) {
-		log_error("mkdir(%s): %m\n", upper);
+		log_error("mkdir(%s): %m", upper);
 		return -1;
 	}
 	if (mkdir(work, 0755) < 0) {
-		log_error("mkdir(%s): %m\n", work);
+		log_error("mkdir(%s): %m", work);
 		return -1;
 	}
 
@@ -503,7 +503,7 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 			lower, upper, work);
 
 	if (mount("foo", where, "overlay", 0, options) < 0) {
-		log_error("Cannot mount overlayfs at %s: %m\n", where);
+		log_error("Cannot mount overlayfs at %s: %m", where);
 		return -1;
 	}
 
@@ -521,7 +521,7 @@ pathinfo_bind_children(struct profile *profile, struct path_info *pi, const char
 
 	dirfd = opendir(source);
 	if (dirfd == NULL) {
-		log_error("%s: unable to open dir %s: %m\n", profile->name, source);
+		log_error("%s: unable to open dir %s: %m", profile->name, source);
 		return -1;
 	}
 
@@ -529,7 +529,7 @@ pathinfo_bind_children(struct profile *profile, struct path_info *pi, const char
 
 	tempdir = fsutil_tempdir_path(&td);
 	if (pathinfo_create_overlay(tempdir, pi->path) < 0) {
-		log_error("unable to create overlay at \"%s\"\n", pi->path);
+		log_error("unable to create overlay at \"%s\"", pi->path);
 		goto out;
 	}
 
@@ -581,13 +581,14 @@ pathinfo_process(struct profile *profile, struct path_info *pi)
 	int len;
 
 	if (pi->replace == NULL) {
-		fprintf(stderr, "%s: do not know how to hide %s\n", profile->name, pi->path);
+		/* hiding is not yet implemented */
+		log_error("%s: do not know how to hide %s - no yet implemented", profile->name, pi->path);
 		return -1;
 	}
 
 	source = pathinfo_expand(profile, pi->replace);
 	if (source == NULL) {
-		fprintf(stderr, "%s: unable to expand \"%s\"\n", profile->name, pi->path);
+		log_error("%s: unable to expand \"%s\"", profile->name, pi->path);
 		return -1;
 	}
 
@@ -598,7 +599,7 @@ pathinfo_process(struct profile *profile, struct path_info *pi)
 	}
 
 	if (!strcmp(source, pi->path)) {
-		fprintf(stderr, "%s: refusing to bind mount %s to %s\n", profile->name,
+		log_error("%s: refusing to bind mount %s to %s", profile->name,
 				source, pi->path);
 		return -1;
 	}
@@ -623,26 +624,26 @@ profile_setup(struct profile *profile)
 		return 0;
 
 	if (mount("none", "/", NULL, MS_REC|MS_PRIVATE, NULL) == -1) {
-		perror("cannot make / private");
+		log_error("cannot make / private: %m");
 		return -1;
 	}
 
 	if (stat("/proc/self/ns/mnt", &stb1) < 0) {
-		perror("stat(\"/proc/self/ns/mnt\")");
+		log_error("stat(\"/proc/self/ns/mnt\") failed: %m");
 		return -1;
 	}
 
 	if (unshare(CLONE_NEWNS) < 0) {
-		perror("unshare(CLONE_NEWNS) failed");
+		log_error("unshare(CLONE_NEWNS) failed: %m");
 		return -1;
 	}
 
 	if (stat("/proc/self/ns/mnt", &stb2) < 0) {
-		perror("stat(\"/proc/self/ns/mnt\")");
+		log_error("stat(\"/proc/self/ns/mnt\") failed: %m");
 		return -1;
 	}
 	if (stb1.st_dev == stb2.st_dev && stb1.st_ino == stb2.st_ino) {
-		fprintf(stderr, "Something is not quite right\n");
+		log_error("Something is not quite right");
 		return -1;
 	}
 #if 0

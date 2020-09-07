@@ -91,7 +91,7 @@ main(int argc, char **argv)
 			break;
 
 		default:
-			fprintf(stderr, "Usage message goes here.\n");
+			log_error("Usage message goes here.");
 			return 2;
 		}
 	}
@@ -107,12 +107,12 @@ wormhole_direct(int argc, char **argv)
 
 	profile = profile_find(argv[0]);
 	if (profile == NULL) {
-		fprintf(stderr, "no profile for %s.\n", argv[0]);
+		log_error("no profile for %s.", argv[0]);
 		return 2;
 	}
 
 	if (profile_setup(profile) < 0) {
-		fprintf(stderr, "Failed to set up environment for %s\n", profile->name);
+		log_error("Failed to set up environment for %s", profile->name);
 		return 2;
 	}
 
@@ -123,7 +123,7 @@ wormhole_direct(int argc, char **argv)
 	printf("I should now execute %s\n", profile->command);
 	execv(profile->command, argv);
 
-	fprintf(stderr, "Unable to execute %s: %m\n", profile->command);
+	log_error("Unable to execute %s: %m", profile->command);
 	return 12;
 }
 
@@ -138,12 +138,12 @@ wormhole_daemon(int argc, char **argv)
 	setuid(getuid());
 
 	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
-		perror("socket");
+		log_error("unable to create PF_LOCAL stream socket: %m");
 		return 1;
 	}
 
 	if (unlink(WORMHOLE_SOCKET_PATH) < 0) {
-		perror("unlink(" WORMHOLE_SOCKET_PATH ")");
+		log_error("unlink(" WORMHOLE_SOCKET_PATH ") failed: %m");
 		return 1;
 	}
 
@@ -151,25 +151,26 @@ wormhole_daemon(int argc, char **argv)
 	sun.sun_family = AF_LOCAL;
 	strcpy(sun.sun_path, WORMHOLE_SOCKET_PATH);
 	if (bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		perror("bind");
+		log_error("cannot bind to %s: %m", WORMHOLE_SOCKET_PATH);
 		return 1;
 	}
 
 	chmod(WORMHOLE_SOCKET_PATH, 0666);
 
 	if (listen(fd, 10) < 0) {
-		perror("listen");
+		log_error("cannot listen on socket: %m");
 		return 1;
 	}
 
 	log_info("wormhole daemon: listening on %s", WORMHOLE_SOCKET_PATH);
 
 	if (!opt_foreground) {
-		set_syslog("wormholed", LOG_DAEMON);
 		if (daemon(false, false) < 0) {
-			perror("listen");
+			log_error("cannot background server process: %m");
 			return 1;
 		}
+
+		set_syslog("wormholed", LOG_DAEMON);
 	}
 
 	while (true) {
@@ -271,7 +272,7 @@ wormhole_client(int argc, char **argv)
 
 	fd = socket(PF_LOCAL, SOCK_STREAM, 0);
 	if (fd < 0) {
-		perror("socket");
+		log_error("socket: %m");
 		return 2;
 	}
 
@@ -279,12 +280,12 @@ wormhole_client(int argc, char **argv)
 	sun.sun_family = AF_LOCAL;
 	strcpy(sun.sun_path, WORMHOLE_SOCKET_PATH);
 	if (connect(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		perror("connect");
+		log_error("connect: %m");
 		return 1;
 	}
 
 	if (send(fd, argv[0], strlen(argv[0]), 0) < 0) {
-		perror("send");
+		log_error("send: %m");
 		return 1;
 	}
 
@@ -300,7 +301,7 @@ wormhole_client(int argc, char **argv)
         msg.msg_controllen = sizeof(u.buf);
 
 	if (recvmsg(fd, &msg, 0) < 0) {
-		perror("recvmsg");
+		log_error("recvmsg: %m");
 		return 1;
 	}
 
@@ -311,12 +312,12 @@ wormhole_client(int argc, char **argv)
 	}
 
 	if (nsfd < 0) {
-		fprintf(stderr, "Server did not send us a namespace FD\n");
+		log_error("Server did not send us a namespace FD");
 		return 2;
 	}
 
 	if (setns(nsfd, CLONE_NEWNS) < 0) {
-		perror("setns");
+		log_error("setns: %m");
 		return 2;
 	}
 
@@ -327,6 +328,6 @@ wormhole_client(int argc, char **argv)
 	printf("I should now execute %s\n", pathbuf);
 	execv(pathbuf, argv);
 
-	fprintf(stderr, "Unable to execute %s: %m\n", pathbuf);
+	log_error("Unable to execute %s: %m", pathbuf);
 	return 12;
 }
