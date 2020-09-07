@@ -53,6 +53,7 @@ struct wormhole_socket {
 	int		recvfd;
 
 	struct buf *	sendbuf;
+	int		sendfd;
 };
 
 #define WORMHOLE_SOCKET_MAX	1024

@@ -104,16 +104,19 @@ static struct wormhole_socket *
 wormhole_socket_new(const struct wormhole_socket_ops *ops, int fd, uid_t uid, gid_t gid)
 {
 	static unsigned int __wormhole_socket_id = 1;
-	struct wormhole_socket *conn;
+	struct wormhole_socket *s;
 
-	conn = calloc(1, sizeof(*conn));
-	conn->ops = ops;
-	conn->id = __wormhole_socket_id++;
-	conn->fd = fd;
-	conn->uid = uid;
-	conn->gid = gid;
+	s = calloc(1, sizeof(*s));
+	s->ops = ops;
+	s->id = __wormhole_socket_id++;
+	s->fd = fd;
+	s->uid = uid;
+	s->gid = gid;
 
-	return conn;
+	s->sendfd = -1;
+	s->recvfd = -1;
+
+	return s;
 }
 
 /*
@@ -328,3 +331,41 @@ wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
 	return wormhole_socket_new(&__wormhole_connected_socket_ops, fd, uid, gid);
 }
 
+void
+wormhole_drop_recvbuf(struct wormhole_socket *s)
+{
+	if (s->recvbuf) {
+		buf_free(s->recvbuf);
+		s->recvbuf = NULL;
+	}
+	if (s->recvfd >= 0) {
+		close(s->recvfd);
+		s->recvfd = -1;
+	}
+}
+
+void
+wormhole_drop_sendbuf(struct wormhole_socket *s)
+{
+	if (s->sendbuf) {
+		buf_free(s->sendbuf);
+		s->sendbuf = NULL;
+	}
+	if (s->sendfd >= 0) {
+		close(s->sendfd);
+		s->sendfd = -1;
+	}
+}
+
+void
+wormhole_socket_free(struct wormhole_socket *s)
+{
+	wormhole_uninstall_socket(s);
+
+	if (s->fd >= 0)
+		close(s->fd);
+
+	wormhole_drop_recvbuf(s);
+	wormhole_drop_sendbuf(s);
+	free(s);
+}

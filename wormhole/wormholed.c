@@ -400,34 +400,3 @@ wormhole_process_request(struct wormhole_request *req)
 		break;
 	}
 }
-
-void
-wormhole_drop_recvbuf(struct wormhole_socket *s)
-{
-	if (s->recvbuf) {
-		buf_free(s->recvbuf);
-		s->recvbuf = NULL;
-	}
-}
-
-void
-wormhole_drop_sendbuf(struct wormhole_socket *s)
-{
-	if (s->sendbuf) {
-		buf_free(s->sendbuf);
-		s->sendbuf = NULL;
-	}
-}
-
-void
-wormhole_socket_free(struct wormhole_socket *s)
-{
-	wormhole_uninstall_socket(s);
-
-	if (s->fd >= 0)
-		close(s->fd);
-
-	wormhole_drop_recvbuf(s);
-	wormhole_drop_sendbuf(s);
-	free(s);
-}
