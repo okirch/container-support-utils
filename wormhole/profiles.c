@@ -19,6 +19,7 @@
  */
 
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -38,7 +39,10 @@
 #include "tracing.h"
 #include "profiles.h"
 #include "runtime.h"
+#include "socket.h"
 #include "util.h"
+
+static struct wormhole_environment *	wormhole_environments;
 
 static struct profile		dummy_profiles[] = {
 	{
@@ -443,4 +447,69 @@ profile_setup(struct profile *profile)
 	}
 
 	return 0;
+}
+
+struct wormhole_environment *
+wormhole_environment_find(const char *name)
+{
+	struct wormhole_environment *env;
+
+	for (env = wormhole_environments; env; env = env->next) {
+		if (!strcmp(env->name, name))
+			return env;
+	}
+
+	env = calloc(1, sizeof(*env));
+	env->name = strdup(name);
+	env->nsfd = -1;
+
+	env->setup_ctx.sock_fd = -1;
+
+	env->next = wormhole_environments;
+	wormhole_environments = env;
+
+	return env;
+}
+
+bool
+wormhole_environment_async_setup(struct wormhole_environment *env, struct profile *profile)
+{
+	int fd[2];
+	pid_t pid;
+	int nsfd;
+
+	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, fd) < 0) {
+		log_error("%s: socketpair failed: %m", __func__);
+		return false;
+	}
+
+	if ((pid = fork()) < 0) {
+		log_error("%s: fork failed: %m", __func__);
+		close(fd[0]);
+		close(fd[1]);
+		return false;
+	}
+
+	if (pid > 0) {
+		env->setup_ctx.child_pid = pid;
+		env->setup_ctx.sock_fd = fd[0];
+		close(fd[1]);
+		return true;
+	}
+
+	env->setup_ctx.sock_fd = fd[1];
+	close(fd[0]);
+
+	if (profile_setup(profile) < 0)
+                log_fatal("Failed to set up environment for %s", profile->name);
+
+        nsfd = open("/proc/self/ns/mnt", O_RDONLY);
+        if (nsfd < 0)
+                log_fatal("Cannot open /proc/self/ns/mnt: %m");
+
+	if (wormhole_socket_sendmsg(env->setup_ctx.sock_fd, NULL, 0, nsfd) < 0)
+		log_fatal("unable to send namespace fd to parent: %m");
+
+	trace("Successfully set up environment \"%s\"", env->name);
+	exit(0);
 }

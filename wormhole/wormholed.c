@@ -332,8 +332,8 @@ void
 wormhole_process_command(struct wormhole_request *req)
 {
 	const char *name;
+	struct wormhole_environment *env;
 	struct profile *profile;
-	int nsfd;
 
 	name = (const char *) (req->payload);
 	trace("Processing request for command \"%s\" from uid %d", name, req->client_uid);
@@ -345,16 +345,19 @@ wormhole_process_command(struct wormhole_request *req)
 		return;
 	}
 
-	if (profile_setup(profile) < 0)
-		log_fatal("Failed to set up environment for %s", profile->name);
+	env = wormhole_environment_find(profile->name);
+	if (env->nsfd < 0) {
+		if (env->setup_ctx.child_pid != 0) {
+			trace("setup for \"%s\" is in process, delaying", env->name);
+			return;
+		}
 
-	nsfd = open("/proc/self/ns/mnt", O_RDONLY);
-	if (nsfd < 0)
-		log_fatal("Cannot open /proc/self/ns/mnt: %m");
-
-	wormhole_respond_with_fd(req, nsfd);
+		wormhole_environment_async_setup(env, profile);
+		return;
+	}
 
 	log_info("served request for a \"%s\" namespace", profile->name);
+	wormhole_respond_with_fd(req, env->nsfd);
 }
 
 void

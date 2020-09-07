@@ -23,6 +23,8 @@
 
 #include "buffer.h"
 
+struct pollfd;
+
 struct wormhole_socket {
 	struct wormhole_socket **prevp;
 	struct wormhole_socket *next;
