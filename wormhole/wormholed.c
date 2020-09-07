@@ -323,8 +323,8 @@ __wormhole_socket_send_with_fd(struct wormhole_socket *s, struct buf *bp, int fd
 	return true;
 }
 
-void
-wormhole_send_response_with_fd(const struct wormhole_request *req, int fd)
+static void
+wormhole_respond_with_fd(const struct wormhole_request *req, int fd)
 {
 	struct wormhole_socket *s;
 	struct buf *bp;
@@ -341,8 +341,8 @@ wormhole_send_response_with_fd(const struct wormhole_request *req, int fd)
 	buf_free(bp);
 }
 
-void
-wormhole_send_status(struct wormhole_request *req, int status)
+static void
+wormhole_respond(struct wormhole_request *req, int status)
 {
 	struct wormhole_socket *s;
 
@@ -369,7 +369,7 @@ wormhole_process_command(struct wormhole_request *req)
 	profile = profile_find(name);
 	if (profile == NULL) {
 		log_error("no profile for %s", name);
-		wormhole_send_status(req, WORMHOLE_STATUS_ERROR);
+		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
 		return;
 	}
 
@@ -380,7 +380,7 @@ wormhole_process_command(struct wormhole_request *req)
 	if (nsfd < 0)
 		log_fatal("Cannot open /proc/self/ns/mnt: %m");
 
-	wormhole_send_response_with_fd(req, nsfd);
+	wormhole_respond_with_fd(req, nsfd);
 	req->reply_sent = true;
 
 	log_info("served request for a \"%s\" namespace", profile->name);
@@ -395,7 +395,8 @@ wormhole_process_request(struct wormhole_request *req)
 		break;
 
 	default:
-		wormhole_send_status(req, WORMHOLE_STATUS_ERROR);
+		log_error("Unknown opcode %d from uid %d", req->opcode, req->client_uid);
+		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
 		break;
 	}
 }
