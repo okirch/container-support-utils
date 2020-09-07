@@ -85,4 +85,20 @@ __buf_advance_head(struct buf *bp, unsigned int len)
 	bp->head += len;
 }
 
+static inline void *
+buf_tail(struct buf *bp)
+{
+	if (bp->tail == BUF_SZ)
+		return NULL;
+
+	return bp->data + bp->tail;
+}
+
+static inline void
+__buf_advance_tail(struct buf *bp, unsigned int len)
+{
+	assert(BUF_SZ - bp->tail >= len);
+	bp->tail += len;
+}
+
 #endif /* _BUF_H */
