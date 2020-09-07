@@ -222,33 +222,91 @@ wormhole_accept_connection(int fd)
 /*
  * Connected socket send/recv functions
  */
-static bool
-__wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp)
-{
-	unsigned char data[512];
-	unsigned int room;
-	int n;
+static int scm_rights_process(struct cmsghdr *cmsg, int *recv_fd);
 
-	room = buf_tailroom(bp);
-	if (room == 0) {
-		log_error("%s: recv buffer overflow", __func__);
-		return false;
+extern int
+wormhole_socket_recvmsg(int fd, void *buffer, size_t buf_sz, int *fdp)
+{
+	struct iovec iov;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	union {
+		struct cmsghdr align;
+		char buf[1024];
+	} u;
+	int n, ndropped = 0;
+
+	if (fdp)
+		*fdp = -1;
+
+	memset(&iov, 0, sizeof(iov));
+	iov.iov_base = buffer;
+	iov.iov_len = buf_sz;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	msg.msg_control = u.buf;
+	msg.msg_controllen = sizeof(u.buf);
+
+	n = recvmsg(fd, &msg, 0);
+	if (n < 0)
+		return n;
+
+	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
+			ndropped += scm_rights_process(cmsg, fdp);
 	}
 
-	if (room > sizeof(data))
-		room = sizeof(data);
+	if (ndropped) {
+		log_warning("Bad SCM_RIGHTS control message(s), dropped %d file descriptors", ndropped);
+		return -1;
+	}
 
-	n = recv(s->fd, data, room, 0);
+	return n;
+}
+
+static int
+scm_rights_process(struct cmsghdr *cmsg, int *recv_fd)
+{
+	int cmsg_data_len = cmsg->cmsg_len - CMSG_ALIGN(sizeof(struct cmsghdr));
+	int *fd_array = (int *) CMSG_DATA(cmsg);
+	int fd_count = cmsg_data_len / sizeof(int);
+	int k;
+	int ndropped = 0;
+
+	for (k = 0; k < fd_count; ++k) {
+		int fd = fd_array[k];
+
+		if (recv_fd == NULL || *recv_fd >= 0) {
+			ndropped ++;
+			close(fd);
+		} else {
+			*recv_fd = fd;
+		}
+	}
+
+	return ndropped;
+}
+
+static bool
+__wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp, int *fdp)
+{
+	int n;
+
+	n = wormhole_socket_recvmsg(s->fd, buf_tail(bp), buf_tailroom(bp), fdp);
 	if (n < 0) {
 		log_error("recv error on socket: %m");
 		return false;
 	}
+
 	if (n == 0) {
 		s->recv_closed = true;
 		return true;
 	}
 
-	buf_put(bp, data, n);
+	__buf_advance_tail(bp, n);
 	return true;
 }
 
@@ -326,7 +384,7 @@ __wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pf
 		if (!s->recvbuf)
 			s->recvbuf = buf_alloc();
 
-		if (!__wormhole_socket_recv(s, s->recvbuf))
+		if (!__wormhole_socket_recv(s, s->recvbuf, NULL))
 			return false;
 
 		/* See whether we have a complete message, and if so, process it */

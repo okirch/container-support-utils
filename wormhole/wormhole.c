@@ -40,6 +40,7 @@
 #include "tracing.h"
 #include "wormhole.h"
 #include "protocol.h"
+#include "socket.h"
 #include "util.h"
 #include "buffer.h"
 
@@ -96,13 +97,6 @@ wormhole_client(int argc, char **argv)
 {
 	struct sockaddr_un sun;
 	char pathbuf[PATH_MAX];
-	struct iovec iov;
-	struct msghdr msg;
-	struct cmsghdr *cmsg;
-	union {
-		struct cmsghdr align;
-		char buf[1024];
-	} u;
 	int fd, nsfd = -1;
 
 	if (1)
@@ -125,26 +119,9 @@ wormhole_client(int argc, char **argv)
 	if (wormhole_send_command(fd,  argv[0]) < 0)
 		return 1;
 
-	memset(&iov, 0, sizeof(iov));
-	iov.iov_base = pathbuf;
-	iov.iov_len = sizeof(pathbuf);
-
-	memset(&msg, 0, sizeof(msg));
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-
-        msg.msg_control = u.buf;
-        msg.msg_controllen = sizeof(u.buf);
-
-	if (recvmsg(fd, &msg, 0) < 0) {
+	if (wormhole_socket_recvmsg(fd, pathbuf, sizeof(pathbuf), &nsfd) < 0) {
 		log_error("recvmsg: %m");
 		return 1;
-	}
-
-	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-			memcpy(&nsfd, CMSG_DATA(cmsg), sizeof(int));
-		}
 	}
 
 	if (nsfd < 0) {
