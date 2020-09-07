@@ -69,6 +69,8 @@ extern struct wormhole_socket *	wormhole_connected_socket_new(int fd, uid_t uid,
 extern void			wormhole_drop_recvbuf(struct wormhole_socket *s);
 extern void			wormhole_drop_sendbuf(struct wormhole_socket *s);
 
+extern void			wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd);
+
 extern void			wormhole_install_socket(struct wormhole_socket *);
 extern void			wormhole_uninstall_socket(struct wormhole_socket *);
 

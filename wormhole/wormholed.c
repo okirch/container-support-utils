@@ -287,44 +287,27 @@ wormhole_enqueue_request_pending(struct wormhole_request *req)
 }
 
 static bool
-__wormhole_socket_send_with_fd(struct wormhole_socket *s, struct buf *bp, int fd)
+__wormhole_respond(struct wormhole_request *req, struct buf *bp, int fd)
 {
-	union {
-		struct cmsghdr align;
-		char buf[1024];
-	} u;
-	struct iovec iov;
-	struct msghdr msg;
-	struct cmsghdr *cmsg;
+	struct wormhole_socket *s;
+	bool ok = false;
 
-	memset(&iov, 0, sizeof(iov));
-	iov.iov_base = (void *) buf_head(bp);
-	iov.iov_len = buf_available(bp);
-
-	memset(&msg, 0, sizeof(msg));
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-
-	if (fd >= 0) {
-		msg.msg_control = u.buf;
-		msg.msg_controllen = sizeof(u.buf);
-
-		cmsg = CMSG_FIRSTHDR(&msg);
-		cmsg->cmsg_level = SOL_SOCKET;
-		cmsg->cmsg_type = SCM_RIGHTS;
-		cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-		memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
-		msg.msg_controllen = CMSG_SPACE(sizeof(int));
+	s = wormhole_socket_find(req->socket_id);
+	if (s != NULL) {
+		wormhole_socket_enqueue(s, bp, fd);
+		ok = true;
+	} else {
+		/* Client disconnected while we were processing the
+		 * request. Pretend we sent the reply. */
+		buf_free(bp);
 	}
 
-	if (sendmsg(s->fd, &msg, 0) < 0)
-		log_fatal("sendmsg: %m");
-
-	return true;
+	req->reply_sent = true;
+	return ok;
 }
 
 static void
-wormhole_respond_with_fd(const struct wormhole_request *req, int fd)
+wormhole_respond_with_fd(struct wormhole_request *req, int fd)
 {
 	struct wormhole_socket *s;
 	struct buf *bp;
@@ -334,26 +317,15 @@ wormhole_respond_with_fd(const struct wormhole_request *req, int fd)
 		return;
 
 	bp = wormhole_message_build_status(WORMHOLE_STATUS_OK);
-	if (!__wormhole_socket_send_with_fd(s, bp, fd)) {
-		/* Mark socket for closing */
-	}
+	wormhole_socket_enqueue(s, bp, fd);
 
-	buf_free(bp);
+	req->reply_sent = true;
 }
 
 static void
 wormhole_respond(struct wormhole_request *req, int status)
 {
-	struct wormhole_socket *s;
-
-	s = wormhole_socket_find(req->socket_id);
-	if (s == NULL)
-		return;
-
-	assert(s->sendbuf == NULL);
-	s->sendbuf = wormhole_message_build_status(status);
-
-	req->reply_sent = true;
+	__wormhole_respond(req, wormhole_message_build_status(status), -1);
 }
 
 void
@@ -381,7 +353,6 @@ wormhole_process_command(struct wormhole_request *req)
 		log_fatal("Cannot open /proc/self/ns/mnt: %m");
 
 	wormhole_respond_with_fd(req, nsfd);
-	req->reply_sent = true;
 
 	log_info("served request for a \"%s\" namespace", profile->name);
 }

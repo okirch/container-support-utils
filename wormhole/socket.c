@@ -253,15 +253,41 @@ __wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp)
 }
 
 static bool
-__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp)
+__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
 {
-	unsigned int avail;
+	union {
+		struct cmsghdr align;
+		char buf[1024];
+	} u;
+	struct iovec iov;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
 	int n;
 
-	avail = buf_available(bp);
-	n = send(s->fd, buf_head(bp), avail, 0);
+	memset(&iov, 0, sizeof(iov));
+	iov.iov_base = (void *) buf_head(bp);
+	iov.iov_len = buf_available(bp);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	if (fd >= 0) {
+		msg.msg_control = u.buf;
+		msg.msg_controllen = sizeof(u.buf);
+
+		cmsg = CMSG_FIRSTHDR(&msg);
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+		memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
+		msg.msg_controllen = CMSG_SPACE(sizeof(int));
+	}
+
+	n = sendmsg(s->fd, &msg, 0);
 	if (n < 0) {
-		log_error("send error on socket: %m");
+		log_error("sendmsg failed: %m");
+		/* mark socket as dead */
 		return false;
 	}
 
@@ -310,8 +336,15 @@ __wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pf
 			return false;
 		}
 
-		if (!__wormhole_socket_send(s, s->sendbuf))
+		if (!__wormhole_socket_send(s, s->sendbuf, s->sendfd))
 			return false;
+
+		/* As long as we sent anything, we assume the sendfd went
+		 * with it. */
+		if (s->sendfd >= 0) {
+			close(s->sendfd);
+			s->sendfd = -1;
+		}
 
 		if (buf_available(s->sendbuf) == 0)
 			wormhole_drop_sendbuf(s);
@@ -329,6 +362,19 @@ struct wormhole_socket *
 wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
 {
 	return wormhole_socket_new(&__wormhole_connected_socket_ops, fd, uid, gid);
+}
+
+void
+wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd)
+{
+	assert(s->ops == &__wormhole_connected_socket_ops);
+	assert(s->sendbuf == NULL);
+	assert(s->sendfd < 0);
+
+	s->sendbuf = bp;
+
+	if (fd >= 0)
+		s->sendfd = dup(fd);
 }
 
 void
