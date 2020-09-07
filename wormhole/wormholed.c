@@ -20,6 +20,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/poll.h>
 #include <syslog.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -44,6 +45,11 @@
 
 struct wormhole_socket {
 	int		fd;
+	struct wormhole_socket_ops {
+		bool	(*poll)(struct wormhole_socket *, struct pollfd *);
+		bool	(*process)(struct wormhole_socket *, struct pollfd *);
+	} * ops;
+
 	uid_t		uid;
 	gid_t		gid;
 };
@@ -59,6 +65,7 @@ static bool			opt_foreground = false;
 
 static int			wormhole_daemon(int argc, char **argv);
 
+static struct wormhole_socket *	wormhole_listen(const char *path);
 static struct wormhole_socket *	wormhole_accept_connection(int fd);
 static void			wormhole_process_connection(int fd);
 static void			wormhole_socket_free(struct wormhole_socket *conn);
@@ -96,31 +103,11 @@ main(int argc, char **argv)
 int
 wormhole_daemon(int argc, char **argv)
 {
-	struct sockaddr_un sun;
-	int fd;
+	struct wormhole_socket *srv_sock;
 
-	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
-		log_error("unable to create PF_LOCAL stream socket: %m");
-		return 1;
-	}
-
-	if (unlink(WORMHOLE_SOCKET_PATH) < 0) {
-		log_error("unlink(" WORMHOLE_SOCKET_PATH ") failed: %m");
-		return 1;
-	}
-
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, WORMHOLE_SOCKET_PATH);
-	if (bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		log_error("cannot bind to %s: %m", WORMHOLE_SOCKET_PATH);
-		return 1;
-	}
-
-	chmod(WORMHOLE_SOCKET_PATH, 0666);
-
-	if (listen(fd, 10) < 0) {
-		log_error("cannot listen on socket: %m");
+	srv_sock = wormhole_listen(WORMHOLE_SOCKET_PATH);
+	if (srv_sock == NULL) {
+		log_error("Cannot set up server socket %s", WORMHOLE_SOCKET_PATH);
 		return 1;
 	}
 
@@ -139,7 +126,7 @@ wormhole_daemon(int argc, char **argv)
 		struct wormhole_socket *conn;
 		pid_t pid;
 
-		conn = wormhole_accept_connection(fd);
+		conn = wormhole_accept_connection(srv_sock->fd);
 		if (conn == NULL)
 			continue;
 
@@ -157,10 +144,58 @@ wormhole_daemon(int argc, char **argv)
 	return 0;
 }
 
+static struct wormhole_socket *
+wormhole_socket_new(int fd, uid_t uid, gid_t gid)
+{
+	struct wormhole_socket *conn;
+
+	conn = calloc(1, sizeof(*conn));
+	conn->fd = fd;
+	conn->uid = uid;
+	conn->gid = gid;
+
+	return conn;
+}
+
+static struct wormhole_socket *
+wormhole_listen(const char *path)
+{
+	struct sockaddr_un sun;
+	int fd;
+
+	if (unlink(path) < 0) {
+		log_error("unlink(%s) failed: %m", path);
+		return NULL;
+	}
+
+	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
+		log_error("unable to create PF_LOCAL stream socket: %m");
+		return NULL;
+	}
+
+	memset(&sun, 0, sizeof(sun));
+	sun.sun_family = AF_LOCAL;
+	strcpy(sun.sun_path, path);
+	if (bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
+		log_error("cannot bind to %s: %m", path);
+		close(fd);
+		return NULL;
+	}
+
+	chmod(path, 0666);
+
+	if (listen(fd, 10) < 0) {
+		log_error("cannot listen on socket: %m");
+		close(fd);
+		return NULL;
+	}
+
+	return wormhole_socket_new(fd, 0, 0);
+}
+
 struct wormhole_socket *
 wormhole_accept_connection(int fd)
 {
-	struct wormhole_socket *conn;
 	int cfd;
 	struct ucred cred;
         socklen_t clen;
@@ -178,12 +213,7 @@ wormhole_accept_connection(int fd)
 		return NULL;
 	}
 
-	conn = calloc(1, sizeof(*conn));
-	conn->fd = cfd;
-	conn->uid = cred.uid;
-	conn->gid = cred.gid;
-
-	return conn;
+	return wormhole_socket_new(cfd, cred.uid, cred.gid);
 }
 
 void
