@@ -252,8 +252,8 @@ __wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp)
 	return true;
 }
 
-static bool
-__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
+int
+wormhole_socket_sendmsg(int sock_fd, void *payload, unsigned int payload_len, int fd)
 {
 	union {
 		struct cmsghdr align;
@@ -262,11 +262,10 @@ __wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
 	struct iovec iov;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
-	int n;
 
 	memset(&iov, 0, sizeof(iov));
-	iov.iov_base = (void *) buf_head(bp);
-	iov.iov_len = buf_available(bp);
+	iov.iov_base = payload;
+	iov.iov_len = payload_len;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.msg_iov = &iov;
@@ -284,14 +283,22 @@ __wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
 		msg.msg_controllen = CMSG_SPACE(sizeof(int));
 	}
 
-	n = sendmsg(s->fd, &msg, 0);
-	if (n < 0) {
+	return sendmsg(sock_fd, &msg, 0);
+}
+
+static bool
+__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
+{
+	int sent;
+
+	sent = wormhole_socket_sendmsg(s->fd, (void *) buf_head(bp), buf_available(bp), fd);
+	if (sent < 0) {
 		log_error("sendmsg failed: %m");
 		/* mark socket as dead */
 		return false;
 	}
 
-	__buf_advance_head(bp, n);
+	__buf_advance_head(bp, sent);
 	return true;
 }
 

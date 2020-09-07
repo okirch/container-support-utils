@@ -74,5 +74,6 @@ extern void			wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp,
 extern void			wormhole_install_socket(struct wormhole_socket *);
 extern void			wormhole_uninstall_socket(struct wormhole_socket *);
 
+extern int			wormhole_socket_sendmsg(int sock_fd, void *payload, unsigned int payload_len, int fd);
 
 #endif // _WORMHOLE_SOCKET_H
