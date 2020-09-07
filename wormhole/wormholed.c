@@ -42,6 +42,12 @@
 #include "profiles.h"
 #include "runtime.h"
 
+struct wormhole_socket {
+	int		fd;
+	uid_t		uid;
+	gid_t		gid;
+};
+
 struct option wormhole_options[] = {
 	{ "foreground",	no_argument,		NULL,	'F' },
 	{ "runtime",	required_argument,	NULL,	'R' },
@@ -52,7 +58,10 @@ static const char *		opt_runtime = "default";
 static bool			opt_foreground = false;
 
 static int			wormhole_daemon(int argc, char **argv);
+
+static struct wormhole_socket *	wormhole_accept_connection(int fd);
 static void			wormhole_process_connection(int fd);
+static void			wormhole_socket_free(struct wormhole_socket *conn);
 
 int
 main(int argc, char **argv)
@@ -127,27 +136,54 @@ wormhole_daemon(int argc, char **argv)
 	}
 
 	while (true) {
+		struct wormhole_socket *conn;
 		pid_t pid;
-		int cfd;
 
-		cfd = accept(fd, NULL, NULL);
-		if (cfd < 0) {
-			log_error("failed to accept incoming connection: %m");
+		conn = wormhole_accept_connection(fd);
+		if (conn == NULL)
 			continue;
-		}
 
 		pid = fork();
 		if (pid == 0) {
-			wormhole_process_connection(cfd);
+			wormhole_process_connection(conn->fd);
 			exit(0);
 		}
 
 		if (pid < 0)
 			log_error("failed to fork child process: %m");
-		close(cfd);
+		wormhole_socket_free(conn);
 	}
 
 	return 0;
+}
+
+struct wormhole_socket *
+wormhole_accept_connection(int fd)
+{
+	struct wormhole_socket *conn;
+	int cfd;
+	struct ucred cred;
+        socklen_t clen;
+
+	cfd = accept(fd, NULL, NULL);
+	if (cfd < 0) {
+		log_error("failed to accept incoming connection: %m");
+		return NULL;
+	}
+
+	clen = sizeof(cred);
+	if (getsockopt(cfd, SOL_SOCKET, SO_PEERCRED, &cred, &clen) < 0) {
+		log_error("failed to get client credentials: %m");
+		close(cfd);
+		return NULL;
+	}
+
+	conn = calloc(1, sizeof(*conn));
+	conn->fd = cfd;
+	conn->uid = cred.uid;
+	conn->gid = cred.gid;
+
+	return conn;
 }
 
 void
@@ -204,4 +240,12 @@ wormhole_process_connection(int fd)
 
 	log_info("served request for a \"%s\" namespace", profile->name);
 	return;
+}
+
+void
+wormhole_socket_free(struct wormhole_socket *conn)
+{
+	if (conn->fd >= 0)
+		close(conn->fd);
+	free(conn);
 }
