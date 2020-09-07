@@ -39,7 +39,9 @@
 
 #include "tracing.h"
 #include "wormhole.h"
+#include "protocol.h"
 #include "util.h"
+#include "buffer.h"
 
 struct option wormhole_options[] = {
 	{ NULL }
@@ -74,6 +76,21 @@ main(int argc, char **argv)
 	return wormhole_client(argc - optind, argv + optind);
 }
 
+static int
+wormhole_send_command(int fd, const char *cmd)
+{
+	struct buf *bp;
+	int rv = 0;
+
+	bp = wormhole_message_build(WORMHOLE_OPCODE_COMMAND, cmd, strlen(cmd));
+	rv = send(fd, buf_head(bp), buf_available(bp), 0);
+	if (rv < 0)
+		log_error("send: %m");
+
+	buf_free(bp);
+	return rv;
+}
+
 int
 wormhole_client(int argc, char **argv)
 {
@@ -105,10 +122,8 @@ wormhole_client(int argc, char **argv)
 		return 1;
 	}
 
-	if (send(fd, argv[0], strlen(argv[0]), 0) < 0) {
-		log_error("send: %m");
+	if (wormhole_send_command(fd,  argv[0]) < 0)
 		return 1;
-	}
 
 	memset(&iov, 0, sizeof(iov));
 	iov.iov_base = pathbuf;

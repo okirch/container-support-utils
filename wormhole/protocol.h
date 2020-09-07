@@ -1,0 +1,56 @@
+/*
+ * protocol.h
+ *
+ *   Copyright (C) 2020 Olaf Kirch <okir@suse.de>
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+#ifndef _WORMHOLE_PROTOCOL_H
+#define _WORMHOLE_PROTOCOL_H
+
+#include <stdint.h>
+#include "buffer.h"
+
+struct wormhole_message {
+	uint16_t	version;
+	uint16_t	reserved;
+	uint16_t	opcode;
+	uint16_t	payload_len;
+};
+
+#define WORMHOLE_PROTOCOL_VERSION_MAJOR	0
+#define WORMHOLE_PROTOCOL_VERSION_MINOR	1
+#define WORMHOLE_PROTOCOL_VERSION	((WORMHOLE_PROTOCOL_VERSION_MAJOR << 8) | WORMHOLE_PROTOCOL_VERSION_MINOR)
+
+#define WORMHOLE_PROTOCOL_MAJOR(v)	((v) >> 8)
+#define WORMHOLE_PROTOCOL_MINOR(v)	((v) & 0xFF)
+
+enum {
+	WORMHOLE_OPCODE_STATUS = 0,
+	WORMHOLE_OPCODE_COMMAND = 1,
+};
+
+enum {
+	WORMHOLE_STATUS_OK = 0,
+	WORMHOLE_STATUS_ERROR = 1,
+};
+
+extern struct buf *	wormhole_message_build(int opcode, const void *payload, size_t payload_len);
+extern bool		wormhole_message_dissect(struct buf *bp, struct wormhole_message *, void **payloadp);
+
+#endif // _WORMHOLE_PROTOCOL_H
+
+
