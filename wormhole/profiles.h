@@ -1,5 +1,5 @@
 /*
- * wormhole.h
+ * profiles.h
  *
  *   Copyright (C) 2020 Olaf Kirch <okir@suse.de>
  *
@@ -18,12 +18,28 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _WORMHOLE_H
-#define _WORMHOLE_H
+#ifndef _WORMHOLE_PROFILES_H
+#define _WORMHOLE_PROFILES_H
 
-#define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
+struct path_info {
+	char *			path;
+	char *			replace;
+};
 
-extern int			wormhole_client(int argc, char **argv);
+#define PATH_INFO_HIDE(n)	{ .path = n, .replace = NULL }
+#define PATH_INFO_REPLACE(n)	{ .path = n, .replace = "$ROOT" n }
+#define PATH_INFO_REPLACE_CHILDREN(n)	{ .path = n, .replace = "$ROOT" n "/*" }
+#define PATH_INFO_WORMHOLE(n)	{ .path = n, .replace = "/usr/bin/wormhole" }
 
-#endif // _WORMHOLE_H
+struct profile {
+	char *			name;
+	char *			command;
+	char *			container_image;
+	char *			mount_point;
+	struct path_info	path_info[128];
+};
 
+extern struct profile *		profile_find(const char *argv0);
+extern int			profile_setup(struct profile *);
+
+#endif // _WORMHOLE_PROFILES_H

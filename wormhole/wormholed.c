@@ -39,9 +39,8 @@
 
 #include "tracing.h"
 #include "wormhole.h"
+#include "profiles.h"
 #include "util.h"
-
-#define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
 
 struct option wormhole_options[] = {
 	{ "foreground",	no_argument,	NULL,	'F' },

@@ -41,8 +41,6 @@
 #include "wormhole.h"
 #include "util.h"
 
-#define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
-
 struct option wormhole_options[] = {
 	{ NULL }
 };

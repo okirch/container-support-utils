@@ -36,7 +36,7 @@
 #include <errno.h>
 
 #include "tracing.h"
-#include "wormhole.h"
+#include "profiles.h"
 #include "util.h"
 
 static struct profile		dummy_profiles[] = {
