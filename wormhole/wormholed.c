@@ -40,13 +40,15 @@
 #include "tracing.h"
 #include "wormhole.h"
 #include "profiles.h"
-#include "util.h"
+#include "runtime.h"
 
 struct option wormhole_options[] = {
-	{ "foreground",	no_argument,	NULL,	'F' },
+	{ "foreground",	no_argument,		NULL,	'F' },
+	{ "runtime",	required_argument,	NULL,	'R' },
 	{ NULL }
 };
 
+static const char *		opt_runtime = "default";
 static bool			opt_foreground = false;
 
 static int			wormhole_daemon(int argc, char **argv);
@@ -67,11 +69,17 @@ main(int argc, char **argv)
 		case 'F':
 			opt_foreground = true;
 			break;
+		case 'R':
+			opt_runtime = optarg;
+			break;
 		default:
 			log_error("Usage message goes here.");
 			return 2;
 		}
 	}
+
+	if (!wormhole_select_runtime(opt_runtime))
+		log_fatal("Unable to set up requested container runtime");
 
 	return wormhole_daemon(argc - optind, argv + optind);
 }
