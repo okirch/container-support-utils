@@ -42,62 +42,9 @@
 #include "wormhole.h"
 #include "profiles.h"
 #include "runtime.h"
+#include "socket.h"
 #include "protocol.h"
 #include "buffer.h"
-
-struct wormhole_socket {
-	struct wormhole_socket **prevp;
-	struct wormhole_socket *next;
-
-	unsigned int	id;
-	int		fd;
-
-	const struct wormhole_socket_ops {
-		bool	(*poll)(struct wormhole_socket *, struct pollfd *);
-		bool	(*process)(struct wormhole_socket *, struct pollfd *);
-	} * ops;
-
-	/* FIXME: add idle timeout */
-	time_t		timeout;
-
-	uid_t		uid;
-	gid_t		gid;
-
-	bool		recv_closed;
-	bool		send_closed;
-
-	struct buf *	recvbuf;
-	struct buf *	sendbuf;
-};
-
-struct option wormhole_options[] = {
-	{ "foreground",	no_argument,		NULL,	'F' },
-	{ "runtime",	required_argument,	NULL,	'R' },
-	{ "debug",	no_argument,		NULL,	'd' },
-	{ NULL }
-};
-
-#define WORMHOLE_SOCKET_MAX	1024
-
-static const char *		opt_runtime = "default";
-static bool			opt_foreground = false;
-
-static int			wormhole_daemon(int argc, char **argv);
-
-static struct wormhole_socket * wormhole_sockets = NULL;
-static unsigned int		wormhole_socket_count = 0;
-
-static struct wormhole_socket *	wormhole_listen(const char *path);
-static struct wormhole_socket *	wormhole_accept_connection(int fd);
-static void			wormhole_install_socket(struct wormhole_socket *);
-static void			wormhole_uninstall_socket(struct wormhole_socket *);
-static struct wormhole_socket *	wormhole_socket_find(unsigned int id);
-static void			wormhole_socket_free(struct wormhole_socket *conn);
-static struct wormhole_socket *	wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid);
-static void			wormhole_drop_recvbuf(struct wormhole_socket *s);
-static void			wormhole_drop_sendbuf(struct wormhole_socket *s);
-
-extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp);
 
 struct wormhole_request {
 	struct wormhole_request *next;
@@ -113,6 +60,20 @@ struct wormhole_request {
 	bool		reply_sent;
 };
 
+struct option wormhole_options[] = {
+	{ "foreground",	no_argument,		NULL,	'F' },
+	{ "runtime",	required_argument,	NULL,	'R' },
+	{ "debug",	no_argument,		NULL,	'd' },
+	{ NULL }
+};
+
+static const char *		opt_runtime = "default";
+static bool			opt_foreground = false;
+
+static int			wormhole_daemon(int argc, char **argv);
+
+extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp);
+
 static struct wormhole_request *wormhole_incoming_requests;
 static struct wormhole_request *wormhole_pending_requests;
 
@@ -122,8 +83,6 @@ static void			wormhole_request_free(struct wormhole_request *);
 static void			wormhole_enqueue_request_incoming(struct wormhole_request *req);
 static void			wormhole_enqueue_request_pending(struct wormhole_request *req);
 static void			wormhole_process_request(struct wormhole_request *req);
-
-static struct wormhole_socket *	__wormhole_socket_accept(int fd, struct wormhole_socket *(*factory)(int, uid_t, gid_t));
 
 int
 main(int argc, char **argv)
@@ -161,9 +120,13 @@ main(int argc, char **argv)
 int
 wormhole_daemon(int argc, char **argv)
 {
+	static struct wormhole_app_ops app_ops = {
+		.new_socket = wormhole_install_socket,
+		.received = wormhole_message_consume,
+	};
 	struct wormhole_socket *srv_sock;
 
-	srv_sock = wormhole_listen(WORMHOLE_SOCKET_PATH);
+	srv_sock = wormhole_listen(WORMHOLE_SOCKET_PATH, &app_ops);
 	if (srv_sock == NULL) {
 		log_error("Cannot set up server socket %s", WORMHOLE_SOCKET_PATH);
 		return 1;
@@ -250,274 +213,9 @@ wormhole_daemon(int argc, char **argv)
 }
 
 void
-wormhole_install_socket(struct wormhole_socket *s)
+wormhole_incoming_connection(struct wormhole_socket *new_sock)
 {
-	struct wormhole_socket **pos;
-
-	/* brutal for now */
-	assert(wormhole_socket_count < WORMHOLE_SOCKET_MAX);
-
-	if (s->prevp != NULL) {
-		log_error("%s: cannot install socket twice", __func__);
-		return;
-	}
-
-	for (pos = &wormhole_sockets; *pos; pos = &((*pos)->next))
-		;
-
-	*pos = s;
-	s->prevp = pos;
-
-	wormhole_socket_count++;
-}
-
-void
-wormhole_uninstall_socket(struct wormhole_socket *s)
-{
-	if (s->prevp == NULL)
-		return;
-
-	*(s->prevp) = s->next;
-	if (s->next)
-		s->next->prevp = s->prevp;
-
-	s->prevp = NULL;
-	s->next = NULL;
-
-	wormhole_socket_count--;
-}
-
-static struct wormhole_socket *
-wormhole_socket_find(unsigned int id)
-{
-	struct wormhole_socket *s;
-	for (s = wormhole_sockets; s; s = s->next) {
-		if (s->id == id)
-			return s;
-	}
-	return NULL;
-}
-
-static struct wormhole_socket *
-wormhole_socket_new(const struct wormhole_socket_ops *ops, int fd, uid_t uid, gid_t gid)
-{
-	static unsigned int __wormhole_socket_id = 1;
-	struct wormhole_socket *conn;
-
-	conn = calloc(1, sizeof(*conn));
-	conn->ops = ops;
-	conn->id = __wormhole_socket_id++;
-	conn->fd = fd;
-	conn->uid = uid;
-	conn->gid = gid;
-
-	return conn;
-}
-
-/*
- * Listening socket
- */
-static bool
-__wormhole_passive_socket_poll(struct wormhole_socket *s, struct pollfd *pfd)
-{
-	pfd->events = POLLIN;
-	return true;
-}
-
-static bool
-__wormhole_passive_socket_process(struct wormhole_socket *s, struct pollfd *pfd)
-{
-	if (pfd->revents & POLLIN) {
-		struct wormhole_socket *new_sock;
-
-		new_sock = __wormhole_socket_accept(s->fd, wormhole_connected_socket_new);
-		if (new_sock)
-			wormhole_install_socket(new_sock);
-	}
-
-	return true;
-}
-
-static struct wormhole_socket_ops __wormhole_passive_socket_ops = {
-	.poll		= __wormhole_passive_socket_poll,
-	.process	= __wormhole_passive_socket_process,
-};
-
-static struct wormhole_socket *
-wormhole_listen(const char *path)
-{
-	struct sockaddr_un sun;
-	int fd;
-
-	if (unlink(path) < 0 && errno != ENOENT) {
-		log_error("unlink(%s) failed: %m", path);
-		return NULL;
-	}
-
-	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
-		log_error("unable to create PF_LOCAL stream socket: %m");
-		return NULL;
-	}
-
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, path);
-	if (bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		log_error("cannot bind to %s: %m", path);
-		close(fd);
-		return NULL;
-	}
-
-	chmod(path, 0666);
-
-	if (listen(fd, 10) < 0) {
-		log_error("cannot listen on socket: %m");
-		close(fd);
-		return NULL;
-	}
-
-	return wormhole_socket_new(&__wormhole_passive_socket_ops, fd, 0, 0);
-}
-
-static struct wormhole_socket *
-__wormhole_socket_accept(int fd, struct wormhole_socket *(*factory)(int, uid_t, gid_t))
-{
-	int cfd;
-	struct ucred cred;
-        socklen_t clen;
-
-	cfd = accept(fd, NULL, NULL);
-	if (cfd < 0) {
-		log_error("failed to accept incoming connection: %m");
-		return NULL;
-	}
-
-	clen = sizeof(cred);
-	if (getsockopt(cfd, SOL_SOCKET, SO_PEERCRED, &cred, &clen) < 0) {
-		log_error("failed to get client credentials: %m");
-		close(cfd);
-		return NULL;
-	}
-
-	return factory(cfd, cred.uid, cred.gid);
-}
-
-struct wormhole_socket *
-wormhole_accept_connection(int fd)
-{
-	return __wormhole_socket_accept(fd, wormhole_connected_socket_new);
-}
-
-/*
- * Connected socket send/recv functions
- */
-static bool
-__wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp)
-{
-	unsigned char data[512];
-	unsigned int room;
-	int n;
-
-	room = buf_tailroom(bp);
-	if (room == 0) {
-		log_error("%s: recv buffer overflow", __func__);
-		return false;
-	}
-
-	if (room > sizeof(data))
-		room = sizeof(data);
-
-	n = recv(s->fd, data, room, 0);
-	if (n < 0) {
-		log_error("recv error on socket: %m");
-		return false;
-	}
-	if (n == 0) {
-		s->recv_closed = true;
-		return true;
-	}
-
-	buf_put(bp, data, n);
-	return true;
-}
-
-static bool
-__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp)
-{
-	unsigned int avail;
-	int n;
-
-	avail = buf_available(bp);
-	n = send(s->fd, buf_head(bp), avail, 0);
-	if (n < 0) {
-		log_error("send error on socket: %m");
-		return false;
-	}
-
-	__buf_advance_head(bp, n);
-	return true;
-}
-
-/*
- * Connected stream socket
- */
-static bool
-__wormhole_connected_socket_poll(struct wormhole_socket *s, struct pollfd *pfd)
-{
-	pfd->events = 0;
-	if (s->sendbuf) {
-		pfd->events = POLLOUT;
-	} else if (!s->recv_closed) {
-		pfd->events = POLLIN;
-	}
-	return !!(pfd->events);
-}
-
-static bool
-__wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pfd)
-{
-	if (pfd->revents & POLLHUP)
-		s->recv_closed = true;
-	if (pfd->revents & POLLIN) {
-		if (!s->recvbuf)
-			s->recvbuf = buf_alloc();
-
-		if (!__wormhole_socket_recv(s, s->recvbuf))
-			return false;
-
-		/* See whether we have a complete message, and if so, process it */
-		wormhole_message_consume(s, s->recvbuf);
-
-		// buf_compact(s->recvbuf);
-		if (buf_available(s->recvbuf) == 0)
-			wormhole_drop_recvbuf(s);
-	}
-
-	if (pfd->revents & POLLOUT) {
-		if (!s->sendbuf) {
-			log_error("%s: POLLOUT signaled but no sendbuf", __func__);
-			return false;
-		}
-
-		if (!__wormhole_socket_send(s, s->sendbuf))
-			return false;
-
-		if (buf_available(s->sendbuf) == 0)
-			wormhole_drop_sendbuf(s);
-	}
-
-	return true;
-}
-
-static struct wormhole_socket_ops __wormhole_connected_socket_ops = {
-	.poll		= __wormhole_connected_socket_poll,
-	.process	= __wormhole_connected_socket_process,
-};
-
-static struct wormhole_socket *
-wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
-{
-	return wormhole_socket_new(&__wormhole_connected_socket_ops, fd, uid, gid);
+	wormhole_install_socket(new_sock);
 }
 
 #include <netinet/in.h>
@@ -526,7 +224,7 @@ bool
 wormhole_message_consume(struct wormhole_socket *s, struct buf *bp)
 {
 	struct wormhole_message msg;
-	void *payload;
+	const void *payload;
 	struct wormhole_request *req;
 
 	if (!wormhole_message_dissect(bp, &msg, &payload))

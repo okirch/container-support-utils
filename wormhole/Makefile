@@ -14,6 +14,7 @@ WORMHOLED_SRCS	= wormholed.c \
 		  profiles.c \
 		  runtime.c \
 		  rt-podman.c \
+		  socket.c \
 		  protocol.c \
 		  util.c
 WORMHOLED_OBJS	= $(WORMHOLED_SRCS:.c=.o)

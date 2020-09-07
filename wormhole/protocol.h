@@ -49,7 +49,7 @@ enum {
 };
 
 extern struct buf *	wormhole_message_build(int opcode, const void *payload, size_t payload_len);
-extern bool		wormhole_message_dissect(struct buf *bp, struct wormhole_message *, void **payloadp);
+extern bool		wormhole_message_dissect(struct buf *bp, struct wormhole_message *, const void **payloadp);
 
 #endif // _WORMHOLE_PROTOCOL_H
 

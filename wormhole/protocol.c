@@ -45,7 +45,7 @@ wormhole_message_build(int opcode, const void *payload, size_t payload_len)
 }
 
 bool
-wormhole_message_dissect(struct buf *bp, struct wormhole_message *msg, void **payloadp)
+wormhole_message_dissect(struct buf *bp, struct wormhole_message *msg, const void **payloadp)
 {
 	unsigned int avail = buf_available(bp);
 	unsigned int msglen = sizeof(*msg);
