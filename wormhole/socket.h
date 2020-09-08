@@ -68,8 +68,11 @@ extern struct wormhole_socket *	wormhole_accept_connection(int fd);
 extern struct wormhole_socket *	wormhole_socket_find(unsigned int id);
 extern void			wormhole_socket_free(struct wormhole_socket *conn);
 extern struct wormhole_socket *	wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid);
+
 extern void			wormhole_drop_recvbuf(struct wormhole_socket *s);
 extern void			wormhole_drop_sendbuf(struct wormhole_socket *s);
+extern void			wormhole_drop_recvfd(struct wormhole_socket *s);
+extern void			wormhole_drop_sendfd(struct wormhole_socket *s);
 
 extern void			wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd);
 

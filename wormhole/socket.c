@@ -406,10 +406,7 @@ __wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pf
 
 		/* As long as we sent anything, we assume the sendfd went
 		 * with it. */
-		if (s->sendfd >= 0) {
-			close(s->sendfd);
-			s->sendfd = -1;
-		}
+		wormhole_drop_sendfd(s);
 
 		if (buf_available(s->sendbuf) == 0)
 			wormhole_drop_sendbuf(s);
@@ -449,6 +446,11 @@ wormhole_drop_recvbuf(struct wormhole_socket *s)
 		buf_free(s->recvbuf);
 		s->recvbuf = NULL;
 	}
+}
+
+void
+wormhole_drop_recvfd(struct wormhole_socket *s)
+{
 	if (s->recvfd >= 0) {
 		close(s->recvfd);
 		s->recvfd = -1;
@@ -462,6 +464,11 @@ wormhole_drop_sendbuf(struct wormhole_socket *s)
 		buf_free(s->sendbuf);
 		s->sendbuf = NULL;
 	}
+}
+
+void
+wormhole_drop_sendfd(struct wormhole_socket *s)
+{
 	if (s->sendfd >= 0) {
 		close(s->sendfd);
 		s->sendfd = -1;
@@ -478,5 +485,8 @@ wormhole_socket_free(struct wormhole_socket *s)
 
 	wormhole_drop_recvbuf(s);
 	wormhole_drop_sendbuf(s);
+
+	wormhole_drop_recvfd(s);
+	wormhole_drop_sendfd(s);
 	free(s);
 }
