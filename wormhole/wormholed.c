@@ -282,12 +282,12 @@ wormhole_process_command(wormhole_request_t *req)
 {
 	const char *name;
 	struct wormhole_environment *env;
-	struct profile *profile;
+	wormhole_profile_t *profile;
 
 	name = req->message->payload.command.string;
 	trace("Processing request for command \"%s\" from uid %d", name, req->client_uid);
 
-	profile = profile_find(name);
+	profile = wormhole_profile_find(name);
 	if (profile == NULL) {
 		log_error("no profile for %s", name);
 		wormhole_respond(req, WORMHOLE_STATUS_ERROR);

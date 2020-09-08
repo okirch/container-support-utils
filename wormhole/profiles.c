@@ -40,7 +40,7 @@
 
 static struct wormhole_environment *	wormhole_environments;
 
-static struct profile		dummy_profiles[] = {
+static wormhole_profile_t		dummy_profiles[] = {
 	{
 		.name =			"ps",
 		.command =		"/usr/bin/ps",
@@ -78,10 +78,10 @@ static struct profile		dummy_profiles[] = {
 	{ NULL }
 };
 
-struct profile *
-profile_find(const char *argv0)
+wormhole_profile_t *
+wormhole_profile_find(const char *argv0)
 {
-	struct profile *profile;
+	wormhole_profile_t *profile;
 	const char *name;
 
 	name = const_basename(argv0);
@@ -102,7 +102,7 @@ profile_find(const char *argv0)
  * Start a container for this image, and mount its file system.
  */
 static const char *
-profile_make_local_name(struct profile *profile)
+profile_make_local_name(wormhole_profile_t *profile)
 {
 	static char local_buf[128];
 	char *s;
@@ -128,7 +128,7 @@ profile_make_local_name(struct profile *profile)
 }
 
 bool
-profile_mount(struct profile *profile)
+profile_mount(wormhole_profile_t *profile)
 {
 	const char *local_name;
 	const char *mount_point;
@@ -175,7 +175,7 @@ dump_mtab(const char *msg)
 
 
 static char *
-pathinfo_expand(const struct profile *profile, const char *path)
+pathinfo_expand(const wormhole_profile_t *profile, const char *path)
 {
 	static char expanded[PATH_MAX];
 
@@ -244,7 +244,7 @@ fsutil_tempdir_cleanup(struct fsutil_tempdir *td)
 }
 
 static int
-_pathinfo_bind_one(struct profile *profile, const char *source, const char *target)
+_pathinfo_bind_one(wormhole_profile_t *profile, const char *source, const char *target)
 {
 	if (mount(source, target, NULL, MS_BIND, NULL) < 0) {
 		log_error("%s: unable to bind mount %s to %s: %m", profile->name, source, target);
@@ -256,7 +256,7 @@ _pathinfo_bind_one(struct profile *profile, const char *source, const char *targ
 }
 
 static int
-pathinfo_bind_directory(struct profile *profile, struct path_info *pi, const char *source)
+pathinfo_bind_directory(wormhole_profile_t *profile, struct path_info *pi, const char *source)
 {
 	return _pathinfo_bind_one(profile, source, pi->path);
 }
@@ -296,7 +296,7 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 }
 
 static int
-pathinfo_bind_children(struct profile *profile, struct path_info *pi, const char *source)
+pathinfo_bind_children(wormhole_profile_t *profile, struct path_info *pi, const char *source)
 {
 	struct fsutil_tempdir td;
 	const char *tempdir;
@@ -359,9 +359,9 @@ out:
 }
 
 static int
-pathinfo_process(struct profile *profile, struct path_info *pi)
+pathinfo_process(wormhole_profile_t *profile, struct path_info *pi)
 {
-	int (*bind_fn)(struct profile *, struct path_info *, const char *) = pathinfo_bind_directory;
+	int (*bind_fn)(wormhole_profile_t *, struct path_info *, const char *) = pathinfo_bind_directory;
 	char *source;
 	int len;
 
@@ -393,7 +393,7 @@ pathinfo_process(struct profile *profile, struct path_info *pi)
 }
 
 int
-profile_setup(struct profile *profile)
+wormhole_profile_setup(wormhole_profile_t *profile)
 {
 	struct path_info *pi;
 	struct stat stb1, stb2;
@@ -542,7 +542,7 @@ wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd
 }
 
 wormhole_socket_t *
-wormhole_environment_async_setup(struct wormhole_environment *env, struct profile *profile)
+wormhole_environment_async_setup(struct wormhole_environment *env, wormhole_profile_t *profile)
 {
 	pid_t pid;
 	int nsfd, sock_fd;
@@ -557,7 +557,7 @@ wormhole_environment_async_setup(struct wormhole_environment *env, struct profil
 		return wormhole_environment_create_fd_receiver(env, sock_fd);
 	}
 
-	if (profile_setup(profile) < 0)
+	if (wormhole_profile_setup(profile) < 0)
                 log_fatal("Failed to set up environment for %s", profile->name);
 
         nsfd = open("/proc/self/ns/mnt", O_RDONLY);

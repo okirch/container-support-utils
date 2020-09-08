@@ -45,7 +45,8 @@ struct wormhole_environment {
 	} setup_ctx;
 };
 
-struct profile {
+typedef struct wormhole_profile wormhole_profile_t;
+struct wormhole_profile {
 	char *			name;
 	char *			command;
 	char *			container_image;
@@ -53,11 +54,11 @@ struct profile {
 	struct path_info	path_info[128];
 };
 
-extern struct profile *			profile_find(const char *argv0);
-extern int				profile_setup(struct profile *);
+extern wormhole_profile_t *		wormhole_profile_find(const char *argv0);
+extern int				wormhole_profile_setup(wormhole_profile_t *);
 
 extern struct wormhole_environment *	wormhole_environment_find(const char *name);
-extern struct wormhole_socket *		wormhole_environment_async_setup(struct wormhole_environment *, struct profile *);
+extern struct wormhole_socket *		wormhole_environment_async_setup(struct wormhole_environment *, wormhole_profile_t *);
 extern bool				wormhole_environment_async_complete(pid_t pid, int status);
 
 #endif // _WORMHOLE_PROFILES_H
