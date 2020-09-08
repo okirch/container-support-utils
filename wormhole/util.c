@@ -31,7 +31,7 @@
 
 
 const char *
-concat_argv(int argc, char **argv)
+wormhole_concat_argv(int argc, char **argv)
 {
 	static char buffer[8192];
 	unsigned int pos, n;
@@ -73,7 +73,7 @@ concat_argv(int argc, char **argv)
 }
 
 const char *
-const_basename(const char *path)
+wormhole_const_basename(const char *path)
 {
 	const char *s;
 

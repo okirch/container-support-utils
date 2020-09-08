@@ -63,7 +63,7 @@ podman_exec(char **argv, int *fdp)
 	pid_t pid;
 
 	if (true)
-		log_debug("About to run: %s", concat_argv(-1, argv));
+		log_debug("About to run: %s", wormhole_concat_argv(-1, argv));
 
 	if (fdp == NULL) {
 		pid = fork();

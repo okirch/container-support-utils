@@ -84,7 +84,7 @@ wormhole_profile_find(const char *argv0)
 	wormhole_profile_t *profile;
 	const char *name;
 
-	name = const_basename(argv0);
+	name = wormhole_const_basename(argv0);
 	if (name == NULL || *name == '\0') {
 		log_error("Cannot detect basename of executable");
 		return NULL;

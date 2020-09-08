@@ -51,7 +51,7 @@ main(int argc, char **argv)
 	if (argc == 0)
 		return 2;
 
-	basename = const_basename(argv[0]);
+	basename = wormhole_const_basename(argv[0]);
 	if (basename == NULL)
 		return 2;
 
