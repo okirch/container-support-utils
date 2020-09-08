@@ -19,6 +19,7 @@ WORMHOLED_SRCS	= wormholed.c \
 		  rt-podman.c \
 		  socket.c \
 		  protocol.c \
+		  config.c \
 		  util.c
 WORMHOLED_OBJS	= $(WORMHOLED_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
@@ -60,6 +61,9 @@ $(WORMHOLE): $(WORMHOLE_OBJS) $(LIB)
 
 $(WORMHOLED): $(WORMHOLED_OBJS) $(LIB)
 	$(CC) $(CFLAGS) -o $@ $(WORMHOLED_OBJS) $(LINK)
+
+config-test: config.c
+	$(CC) $(CFLAGS) -o $@ -DTEST config.c $(LINK)
 
 ifeq ($(wildcard .depend), .depend)
 include .depend

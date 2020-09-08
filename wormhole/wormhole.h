@@ -22,6 +22,8 @@
 #define _WORMHOLE_H
 
 #define WORMHOLE_SOCKET_PATH	"/var/run/wormhole.sock"
+#define WORMHOLE_CONFIG_PATH	"/etc/wormhole.conf"
+#define WORMHOLE_CLIENT_PATH	"/usr/bin/wormhole"
 
 extern int			wormhole_client(int argc, char **argv);
 

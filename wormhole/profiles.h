@@ -21,7 +21,15 @@
 #ifndef _WORMHOLE_PROFILES_H
 #define _WORMHOLE_PROFILES_H
 
+enum {
+	WORMHOLE_PATH_TYPE_HIDE,
+	WORMHOLE_PATH_TYPE_OVERLAY,
+	WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN,
+	WORMHOLE_PATH_TYPE_WORMHOLE,
+};
+
 struct path_info {
+	int			type;
 	char *			path;
 	char *			replace;
 };

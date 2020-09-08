@@ -31,6 +31,7 @@
 #include "tracing.h"
 #include "wormhole.h"
 #include "profiles.h"
+#include "config.h"
 #include "runtime.h"
 #include "socket.h"
 #include "protocol.h"
@@ -99,6 +100,9 @@ main(int argc, char **argv)
 
 	if (!wormhole_select_runtime(opt_runtime))
 		log_fatal("Unable to set up requested container runtime");
+
+	if (!wormhole_config_load(WORMHOLE_CONFIG_PATH))
+		log_fatal("Unable to load configuration file");
 
 	return wormhole_daemon();
 }
