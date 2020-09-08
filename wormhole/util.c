@@ -159,3 +159,29 @@ wormhole_get_exited_child(int *status)
 	return pid;
 }
 
+bool
+wormhole_child_status_okay(int status)
+{
+	if (WIFSIGNALED(status))
+		return false;
+
+	if (!WIFEXITED(status))
+		return false;
+
+	return WEXITSTATUS(status) == 0;
+}
+
+const char *
+wormhole_child_status_describe(int status)
+{
+	static char msgbuf[128];
+
+	if (WIFSIGNALED(status)) {
+		snprintf(msgbuf, sizeof(msgbuf), "crashed with signal %d", WTERMSIG(status));
+	} else if (WIFEXITED(status)) {
+		snprintf(msgbuf, sizeof(msgbuf), "exited with status %d", WEXITSTATUS(status));
+	} else {
+		snprintf(msgbuf, sizeof(msgbuf), "weird status word 0x%x", status);
+	}
+	return msgbuf;
+}
