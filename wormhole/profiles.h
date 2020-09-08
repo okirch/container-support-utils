@@ -36,6 +36,7 @@ struct wormhole_environment {
 
 	char *			name;
 	int			nsfd;
+	bool			failed;
 
 	/* While setup is in process */
 	struct {

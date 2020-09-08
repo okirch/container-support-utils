@@ -582,8 +582,16 @@ wormhole_environment_async_complete(pid_t pid, int status)
 	if (!(env = wormhole_environment_find_by_pid(pid)))
 		return false;
 
-	/* Ignore the status for now. What's done is done. */
-	trace("Environment \"%s\": setup process complete", env->name);
 	env->setup_ctx.child_pid = 0;
+
+	if (!wormhole_child_status_okay(status)) {
+		log_error("Environment \"%s\": setup process failed (%s)", env->name,
+				wormhole_child_status_describe(status));
+		env->failed = true;
+	} else {
+		trace("Environment \"%s\": setup process complete", env->name);
+		env->failed = false;
+	}
+
 	return true;
 }
