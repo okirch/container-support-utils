@@ -101,4 +101,10 @@ __buf_advance_tail(struct buf *bp, unsigned int len)
 	bp->tail += len;
 }
 
+static inline void
+buf_zap(struct buf *bp)
+{
+	bp->head = bp->tail = 0;
+}
+
 #endif /* _BUF_H */
