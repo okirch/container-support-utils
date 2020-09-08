@@ -143,17 +143,29 @@ wormhole_recv_command_status(int sock_fd, char *cmdbuf, size_t cmdsize, int *res
 		goto failed;
 	}
 
-	if (pmsg->hdr.opcode != WORMHOLE_OPCODE_COMMAND_STATUS) {
+	switch (pmsg->hdr.opcode) {
+	case WORMHOLE_OPCODE_STATUS:
+		if (pmsg->payload.status.status != WORMHOLE_STATUS_OK) {
+			log_error("Server returns error status %d!", pmsg->payload.command.status);
+			goto failed;
+		}
+		cmdbuf[0] = '\0';
+		break;
+
+	case WORMHOLE_OPCODE_COMMAND_STATUS:
+		if (pmsg->payload.command.status != WORMHOLE_STATUS_OK) {
+			log_error("Server returns error status %d!", pmsg->payload.command.status);
+			goto failed;
+		}
+
+		strncpy(cmdbuf, pmsg->payload.command.string, cmdsize - 1);
+		break;
+
+	default:
 		log_error("Unexpected opcode %d in server response!", pmsg->hdr.opcode);
 		goto failed;
 	}
 
-	if (pmsg->payload.command.status != WORMHOLE_STATUS_OK) {
-		log_error("Server returns error status %d!", pmsg->payload.command.status);
-		goto failed;
-	}
-
-	strncpy(cmdbuf, pmsg->payload.command.string, cmdsize - 1);
 	return true;
 
 failed:
@@ -170,9 +182,6 @@ wormhole_client(int argc, char **argv)
 	struct sockaddr_un sun;
 	char pathbuf[PATH_MAX];
 	int fd, nsfd = -1;
-
-	if (1)
-		printf("Executed as: %s\n", concat_argv(argc, argv));
 
 	fd = socket(PF_LOCAL, SOCK_STREAM, 0);
 	if (fd < 0) {
