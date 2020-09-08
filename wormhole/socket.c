@@ -384,11 +384,14 @@ __wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pf
 		if (!s->recvbuf)
 			s->recvbuf = buf_alloc();
 
-		if (!__wormhole_socket_recv(s, s->recvbuf, NULL))
+		if (!__wormhole_socket_recv(s, s->recvbuf, &s->recvfd))
 			return false;
 
 		/* See whether we have a complete message, and if so, process it */
-		s->app_ops->received(s, s->recvbuf);
+		s->app_ops->received(s, s->recvbuf, s->recvfd);
+
+		/* We consumed the fd that came with this message. */
+		wormhole_drop_recvfd(s);
 
 		// buf_compact(s->recvbuf);
 		if (buf_available(s->recvbuf) == 0)

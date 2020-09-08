@@ -39,7 +39,7 @@ struct wormhole_socket {
 
 	struct wormhole_app_ops {
 		void	(*new_socket)(struct wormhole_socket *);
-		bool	(*received)(struct wormhole_socket *, struct buf *);
+		bool	(*received)(struct wormhole_socket *, struct buf *, int);
 	} *app_ops;
 
 	/* FIXME: add idle timeout */

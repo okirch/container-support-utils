@@ -72,7 +72,7 @@ static bool			opt_foreground = false;
 
 static int			wormhole_daemon(int argc, char **argv);
 
-extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp);
+extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd);
 
 static struct wormhole_request *wormhole_incoming_requests;
 static struct wormhole_request *wormhole_pending_requests;
@@ -213,7 +213,7 @@ wormhole_daemon(int argc, char **argv)
 }
 
 bool
-wormhole_message_consume(struct wormhole_socket *s, struct buf *bp)
+wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd)
 {
 	struct wormhole_message msg;
 	const void *payload;
