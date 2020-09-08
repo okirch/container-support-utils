@@ -75,13 +75,12 @@ static int			wormhole_daemon(int argc, char **argv);
 extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd);
 
 static struct wormhole_request *wormhole_incoming_requests;
-static struct wormhole_request *wormhole_pending_requests;
 
 static struct wormhole_request *wormhole_request_new(const struct wormhole_message *msg, const void *payload);
 static void			wormhole_request_free(struct wormhole_request *);
 
 static void			wormhole_enqueue_request_incoming(struct wormhole_request *req);
-static void			wormhole_enqueue_request_pending(struct wormhole_request *req);
+static void			wormhole_process_pending_requests(void);
 static void			wormhole_process_request(struct wormhole_request *req);
 
 int
@@ -149,9 +148,6 @@ wormhole_daemon(int argc, char **argv)
 		struct wormhole_socket *sock_array[WORMHOLE_SOCKET_MAX];
 		struct wormhole_socket **pos, *s;
 		int i, nfd = 0;
-		struct wormhole_socket *conn;
-		struct wormhole_request *req;
-		pid_t pid;
 
 		for (pos = &wormhole_sockets; (s = *pos) != NULL; ) {
 			assert(nfd < WORMHOLE_SOCKET_MAX);
@@ -180,33 +176,7 @@ wormhole_daemon(int argc, char **argv)
 			}
 		}
 
-		while ((req = wormhole_incoming_requests) != NULL) {
-			wormhole_incoming_requests = req->next;
-			req->next = NULL;
-
-			trace("dequeuing req %p", req);
-			wormhole_process_request(req);
-
-			if (req->reply_sent) {
-				wormhole_request_free(req);
-			} else {
-				wormhole_enqueue_request_pending(req);
-			}
-		}
-
-		continue;
-		conn = wormhole_accept_connection(srv_sock->fd);
-		if (conn == NULL)
-			continue;
-
-		pid = fork();
-		if (pid == 0) {
-			exit(0);
-		}
-
-		if (pid < 0)
-			log_error("failed to fork child process: %m");
-		wormhole_socket_free(conn);
+		wormhole_process_pending_requests();
 	}
 
 	return 0;
@@ -278,12 +248,6 @@ void
 wormhole_enqueue_request_incoming(struct wormhole_request *req)
 {
 	wormhole_request_list_insert(&wormhole_incoming_requests, req);
-}
-
-void
-wormhole_enqueue_request_pending(struct wormhole_request *req)
-{
-	wormhole_request_list_insert(&wormhole_pending_requests, req);
 }
 
 static bool
@@ -372,5 +336,24 @@ wormhole_process_request(struct wormhole_request *req)
 		log_error("Unknown opcode %d from uid %d", req->opcode, req->client_uid);
 		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
 		break;
+	}
+}
+
+void
+wormhole_process_pending_requests(void)
+{
+	struct wormhole_request **pos, *req;
+
+	for (pos = &wormhole_incoming_requests; (req = *pos) != NULL; ) {
+		/* See if we can complete the request. */
+		wormhole_process_request(req);
+
+		if (req->reply_sent) {
+			*pos = req->next;
+			wormhole_request_free(req);
+			continue;
+		}
+
+		pos = &req->next;
 	}
 }
