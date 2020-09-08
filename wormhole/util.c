@@ -19,10 +19,12 @@
  */
 
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "tracing.h"
 #include "util.h"
@@ -115,6 +117,45 @@ wormhole_fork_with_socket(int *fdp)
 		*fdp = fdpair[1];
 	}
 
+	return pid;
+}
+
+/*
+ * Reap exited children
+ */
+static bool	have_waiting_children = false;
+
+static void
+reaper(int sig)
+{
+	have_waiting_children = true;
+}
+
+void
+wormhole_install_sigchild_handler(void)
+{
+	struct sigaction act;
+
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = reaper;
+	sigaction(SIGCHLD, &act, NULL);
+}
+
+pid_t
+wormhole_get_exited_child(int *status)
+{
+	pid_t pid;
+
+	if (!have_waiting_children)
+		return -1;
+
+	have_waiting_children = false;
+	pid = waitpid(-1, status, WNOHANG);
+
+	if (pid < 0 && errno != ECHILD)
+		return pid;
+
+	have_waiting_children = true;
 	return pid;
 }
 

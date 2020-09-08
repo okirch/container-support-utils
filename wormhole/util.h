@@ -26,6 +26,7 @@
 extern const char *		const_basename(const char *path);
 extern const char *		concat_argv(int argc, char **argv);
 extern pid_t			wormhole_fork_with_socket(int *fdp);
-
+extern void			wormhole_install_sigchild_handler(void);
+extern pid_t			wormhole_get_exited_child(int *status);
 
 #endif // _WORMHOLE_UTIL_H
