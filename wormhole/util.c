@@ -18,6 +18,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -87,3 +88,33 @@ const_basename(const char *path)
 
 	return &s[1];
 }
+
+pid_t
+wormhole_fork_with_socket(int *fdp)
+{
+	int fdpair[2];
+	pid_t pid;
+
+	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, fdpair) < 0) {
+		log_error("%s: socketpair failed: %m", __func__);
+		return -1;
+	}
+
+	if ((pid = fork()) < 0) {
+		log_error("%s: fork failed: %m", __func__);
+		close(fdpair[0]);
+		close(fdpair[1]);
+		return -1;
+	}
+
+	if (pid > 0) {
+		*fdp = fdpair[0];
+		close(fdpair[1]);
+	} else {
+		close(fdpair[0]);
+		*fdp = fdpair[1];
+	}
+
+	return pid;
+}
+

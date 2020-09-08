@@ -21,8 +21,11 @@
 #ifndef _WORMHOLE_UTIL_H
 #define _WORMHOLE_UTIL_H
 
+#include <sys/types.h>
 
 extern const char *		const_basename(const char *path);
 extern const char *		concat_argv(int argc, char **argv);
+extern pid_t			wormhole_fork_with_socket(int *fdp);
+
 
 #endif // _WORMHOLE_UTIL_H
