@@ -83,13 +83,85 @@ wormhole_send_command(int fd, const char *cmd)
 	struct buf *bp;
 	int rv = 0;
 
-	bp = wormhole_message_build(WORMHOLE_OPCODE_COMMAND, cmd, strlen(cmd));
+	bp = wormhole_message_build_command_request(cmd);
 	rv = send(fd, buf_head(bp), buf_available(bp), 0);
 	if (rv < 0)
 		log_error("send: %m");
 
 	buf_free(bp);
 	return rv;
+}
+
+static struct buf *
+wormhole_recv_response(int sock_fd, int *resp_fd)
+{
+	struct buf *bp = buf_alloc();
+
+	*resp_fd = -1;
+	while (!wormhole_message_complete(bp)) {
+		int received, fd;
+
+		received = wormhole_socket_recvmsg(sock_fd, buf_tail(bp), buf_tailroom(bp), &fd);
+		if (received < 0) {
+			log_error("recvmsg: %m");
+			goto failed;
+		}
+
+		if (received == 0) {
+			log_error("%s: EOF on socket while waiting for complete message", __func__);
+			goto failed;
+		}
+
+		__buf_advance_tail(bp, received);
+		if (fd >= 0)
+			*resp_fd = fd;
+	}
+
+	return bp;
+
+failed:
+	if (*resp_fd >= 0) {
+		close(*resp_fd);
+		*resp_fd = -1;
+	}
+	buf_free(bp);
+	return NULL;
+}
+
+static bool
+wormhole_recv_command_status(int sock_fd, char *cmdbuf, size_t cmdsize, int *resp_fd)
+{
+	struct wormhole_message_parsed *pmsg = NULL;
+	struct buf *bp;
+
+	if (!(bp = wormhole_recv_response(sock_fd, resp_fd)))
+		goto failed;
+
+	pmsg = wormhole_message_parse(bp, 0);
+	if (pmsg == NULL) {
+		log_error("Unable to parse server response!");
+		goto failed;
+	}
+
+	if (pmsg->hdr.opcode != WORMHOLE_OPCODE_COMMAND_STATUS) {
+		log_error("Unexpected opcode %d in server response!", pmsg->hdr.opcode);
+		goto failed;
+	}
+
+	if (pmsg->payload.command.status != WORMHOLE_STATUS_OK) {
+		log_error("Server returns error status %d!", pmsg->payload.command.status);
+		goto failed;
+	}
+
+	strncpy(cmdbuf, pmsg->payload.command.string, cmdsize - 1);
+	return true;
+
+failed:
+	if (pmsg)
+		wormhole_message_free_parsed(pmsg);
+	if (bp)
+		buf_free(bp);
+	return false;
 }
 
 int
@@ -116,13 +188,11 @@ wormhole_client(int argc, char **argv)
 		return 1;
 	}
 
-	if (wormhole_send_command(fd,  argv[0]) < 0)
+	if (wormhole_send_command(fd, argv[0]) < 0)
 		return 1;
 
-	if (wormhole_socket_recvmsg(fd, pathbuf, sizeof(pathbuf), &nsfd) < 0) {
-		log_error("recvmsg: %m");
+	if (!wormhole_recv_command_status(fd, pathbuf, sizeof(pathbuf), &nsfd))
 		return 1;
-	}
 
 	if (nsfd < 0) {
 		log_error("Server did not send us a namespace FD");
