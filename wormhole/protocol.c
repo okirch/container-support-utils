@@ -56,6 +56,9 @@ wormhole_message_build_status(unsigned int status)
 static bool
 __wormhole_message_put_string(char buffer[WORMHOLE_PROTOCOL_STRING_MAX], const char *s)
 {
+	if (s == NULL)
+		return true;
+
 	if (strlen(s) >= WORMHOLE_PROTOCOL_STRING_MAX)
 		return false;
 	strcpy(buffer, s);
