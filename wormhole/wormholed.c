@@ -61,7 +61,7 @@ struct option wormhole_options[] = {
 static const char *		opt_runtime = "default";
 static bool			opt_foreground = false;
 
-static int			wormhole_daemon(int argc, char **argv);
+static int			wormhole_daemon(void);
 static void			wormhole_reap_children(void);
 
 static bool			wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd);
@@ -79,11 +79,6 @@ int
 main(int argc, char **argv)
 {
 	int c;
-
-	/* Someone trying to invoke us without argv0 doesn't deserve
-	 * an error message. */
-	if (argc == 0)
-		return 2;
 
 	while ((c = getopt_long(argc, argv, "d", wormhole_options, NULL)) != EOF) {
 		switch (c) {
@@ -105,11 +100,11 @@ main(int argc, char **argv)
 	if (!wormhole_select_runtime(opt_runtime))
 		log_fatal("Unable to set up requested container runtime");
 
-	return wormhole_daemon(argc - optind, argv + optind);
+	return wormhole_daemon();
 }
 
 int
-wormhole_daemon(int argc, char **argv)
+wormhole_daemon(void)
 {
 	static struct wormhole_app_ops app_ops = {
 		.new_socket = wormhole_install_socket,
