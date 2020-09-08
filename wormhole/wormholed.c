@@ -155,6 +155,8 @@ wormhole_daemon(int argc, char **argv)
 
 		wormhole_reap_children();
 
+		wormhole_process_pending_requests();
+
 		for (pos = &wormhole_sockets; (s = *pos) != NULL; ) {
 			assert(nfd < WORMHOLE_SOCKET_MAX);
 
@@ -171,7 +173,8 @@ wormhole_daemon(int argc, char **argv)
 		}
 
 		if (poll(poll_array, nfd, -1) < 0) {
-			log_error("poll: %m");
+			if (errno != EINTR)
+				log_error("poll: %m");
 			continue;
 		}
 
@@ -181,8 +184,6 @@ wormhole_daemon(int argc, char **argv)
 				/* should drop the socket */
 			}
 		}
-
-		wormhole_process_pending_requests();
 	}
 
 	return 0;
@@ -304,6 +305,15 @@ wormhole_process_command(struct wormhole_request *req)
 	}
 
 	env = wormhole_environment_find(profile->name);
+
+	/* If the setup command exited with an error status, return a failure indication
+	 * to the client. */
+	if (env->failed) {
+		log_info("request for namespace \"%s\": failed", profile->name);
+		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
+		return;
+	}
+
 	if (env->nsfd < 0) {
 		struct wormhole_socket *setup_sock;
 
@@ -325,10 +335,11 @@ wormhole_process_command(struct wormhole_request *req)
 		return;
 	}
 
-	log_info("served request for a \"%s\" namespace", profile->name);
 	__wormhole_respond(req,
 		wormhole_message_build_command_status(WORMHOLE_STATUS_OK, profile->command),
 		env->nsfd);
+
+	log_info("served request for a \"%s\" namespace", profile->name);
 }
 
 void
