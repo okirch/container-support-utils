@@ -311,12 +311,30 @@ wormhole_process_command(struct wormhole_request *req)
 
 	env = wormhole_environment_find(profile->name);
 	if (env->nsfd < 0) {
+		struct wormhole_socket *setup_sock;
+
 		if (env->setup_ctx.child_pid != 0) {
 			trace("setup for \"%s\" is in process, delaying", env->name);
 			return;
 		}
 
-		wormhole_environment_async_setup(env, profile);
+		/* The profile setup starts a process in the background,
+		 * connected via a socketpair. When it completes, it passes
+		 * a namespace fd back to the daemon process.
+		 */
+		setup_sock = wormhole_environment_async_setup(env, profile);
+
+		/* set up a socket to recv the namespace FD from the child
+		 * process. */
+		/*
+		wormhole_connected_socket_new(env->setup_ctx.sock_fd, 0, 0);
+		setup_sock->app_ops = &app_ops;
+		*/
+		wormhole_install_socket(setup_sock);
+		env->setup_ctx.sock_id = setup_sock->id;
+
+		/*
+		 * Collect child status in mainloop. */
 		return;
 	}
 

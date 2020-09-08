@@ -40,7 +40,7 @@ struct wormhole_environment {
 	/* While setup is in process */
 	struct {
 		pid_t		child_pid;
-		int		sock_fd;
+		unsigned int	sock_id;
 	} setup_ctx;
 };
 
@@ -56,6 +56,6 @@ extern struct profile *			profile_find(const char *argv0);
 extern int				profile_setup(struct profile *);
 
 extern struct wormhole_environment *	wormhole_environment_find(const char *name);
-extern bool				wormhole_environment_async_setup(struct wormhole_environment *, struct profile *);
+extern struct wormhole_socket *		wormhole_environment_async_setup(struct wormhole_environment *, struct profile *);
 
 #endif // _WORMHOLE_PROFILES_H

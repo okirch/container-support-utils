@@ -19,7 +19,6 @@
  */
 
 #include <sys/wait.h>
-#include <sys/socket.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -255,7 +254,7 @@ _pathinfo_bind_one(struct profile *profile, const char *source, const char *targ
 		return -1;
 	}
 
-	log_error("%s: bind mounted %s to %s", profile->name, source, target);
+	trace("%s: bind mounted %s to %s", profile->name, source, target);
 	return 0;
 }
 
@@ -449,6 +448,33 @@ profile_setup(struct profile *profile)
 	return 0;
 }
 
+static struct wormhole_environment *
+wormhole_environment_new(const char *name)
+{
+	struct wormhole_environment *env;
+
+	env = calloc(1, sizeof(*env));
+	env->name = strdup(name);
+	env->nsfd = -1;
+
+	env->next = wormhole_environments;
+	wormhole_environments = env;
+
+	return env;
+}
+
+static void
+wormhole_environment_set_fd(struct wormhole_environment *env, int fd)
+{
+	if (env->nsfd >= 0) {
+		close(env->nsfd >= 0);
+		env->nsfd = -1;
+	}
+
+	trace("Environment \"%s\": installing namespace fd %d", env->name, fd);
+	env->nsfd = fd;
+}
+
 struct wormhole_environment *
 wormhole_environment_find(const char *name)
 {
@@ -459,46 +485,67 @@ wormhole_environment_find(const char *name)
 			return env;
 	}
 
-	env = calloc(1, sizeof(*env));
-	env->name = strdup(name);
-	env->nsfd = -1;
-
-	env->setup_ctx.sock_fd = -1;
-
-	env->next = wormhole_environments;
-	wormhole_environments = env;
-
-	return env;
+	return wormhole_environment_new(name);
 }
 
-bool
+/*
+ * Server side socket handler for receiving namespace fds passed back to us by
+ * the async profile setup code.
+ */
+static bool
+wormhole_environment_fd_received(struct wormhole_socket *s, struct buf *bp, int fd)
+{
+	struct wormhole_environment *env;
+
+	trace("%s(sock_id=%d)", __func__, s->id);
+	if (fd < 0) {
+		log_error("%s: missing file descriptor from client", __func__);
+		return false;
+	}
+
+	for (env = wormhole_environments; env; env = env->next) {
+		if (env->setup_ctx.sock_id == s->id) {
+			/* We need to dup the file descriptor, as our caller will close it */
+			wormhole_environment_set_fd(env, dup(fd));
+			buf_zap(bp);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static struct wormhole_socket *
+wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd)
+{
+	static struct wormhole_app_ops app_ops = {
+		.received = wormhole_environment_fd_received,
+		// .closed = wormhole_environment_fd_closed,
+	};
+	struct wormhole_socket *sock;
+
+	sock = wormhole_connected_socket_new(fd, 0, 0);
+	sock->app_ops = &app_ops;
+
+	env->setup_ctx.sock_id = sock->id;
+	return sock;
+}
+
+struct wormhole_socket *
 wormhole_environment_async_setup(struct wormhole_environment *env, struct profile *profile)
 {
-	int fd[2];
 	pid_t pid;
-	int nsfd;
+	int nsfd, sock_fd;
 
-	if (socketpair(PF_LOCAL, SOCK_STREAM, 0, fd) < 0) {
-		log_error("%s: socketpair failed: %m", __func__);
-		return false;
-	}
-
-	if ((pid = fork()) < 0) {
-		log_error("%s: fork failed: %m", __func__);
-		close(fd[0]);
-		close(fd[1]);
-		return false;
-	}
+	pid = wormhole_fork_with_socket(&sock_fd);
+	if (pid < 0)
+		return NULL;
 
 	if (pid > 0) {
 		env->setup_ctx.child_pid = pid;
-		env->setup_ctx.sock_fd = fd[0];
-		close(fd[1]);
-		return true;
-	}
 
-	env->setup_ctx.sock_fd = fd[1];
-	close(fd[0]);
+		return wormhole_environment_create_fd_receiver(env, sock_fd);
+	}
 
 	if (profile_setup(profile) < 0)
                 log_fatal("Failed to set up environment for %s", profile->name);
@@ -507,7 +554,7 @@ wormhole_environment_async_setup(struct wormhole_environment *env, struct profil
         if (nsfd < 0)
                 log_fatal("Cannot open /proc/self/ns/mnt: %m");
 
-	if (wormhole_socket_sendmsg(env->setup_ctx.sock_fd, NULL, 0, nsfd) < 0)
+	if (wormhole_socket_sendmsg(sock_fd, "", 1, nsfd) < 0)
 		log_fatal("unable to send namespace fd to parent: %m");
 
 	trace("Successfully set up environment \"%s\"", env->name);
