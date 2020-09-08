@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "protocol.h"
+#include "tracing.h"
 
 struct buf *
 wormhole_message_build(int opcode, const void *payload, size_t payload_len)
@@ -40,47 +41,150 @@ wormhole_message_build(int opcode, const void *payload, size_t payload_len)
 	buf_put(bp, &msg, sizeof(msg));
 	if (payload_len)
 		buf_put(bp, payload, payload_len);
-
 	return bp;
 }
 
 struct buf *
 wormhole_message_build_status(unsigned int status)
 {
-	uint32_t status32;
+	struct wormhole_message_status payload;
 
-	status32 = htonl(status);
-	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &status32, sizeof(status32));
+	payload.status = htonl(status);
+	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &payload, sizeof(payload));
 }
 
-bool
-wormhole_message_dissect(struct buf *bp, struct wormhole_message *msg, const void **payloadp)
+static bool
+__wormhole_message_put_string(char buffer[WORMHOLE_PROTOCOL_STRING_MAX], const char *s)
 {
-	unsigned int avail = buf_available(bp);
-	unsigned int msglen = sizeof(*msg);
-
-	if (avail < sizeof(*msg))
+	if (strlen(s) >= WORMHOLE_PROTOCOL_STRING_MAX)
 		return false;
+	strcpy(buffer, s);
+	return true;
+}
 
-	if (buf_get(bp, msg, msglen) < msglen)
+static struct buf *
+__wormhole_message_build_command(int opcode, int status, const char *name)
+{
+	struct wormhole_message_command payload;
+
+	memset(&payload, 0, sizeof(payload));
+	if (opcode == WORMHOLE_OPCODE_COMMAND_STATUS)
+		payload.status = htonl(status);
+
+	if (!__wormhole_message_put_string(payload.string, name))
+		return NULL;
+
+	return wormhole_message_build(opcode, &payload, sizeof(payload));
+}
+
+struct buf *
+wormhole_message_build_command_request(const char *name)
+{
+	return __wormhole_message_build_command(WORMHOLE_OPCODE_COMMAND_REQUEST, 0, name);
+}
+
+struct buf *
+wormhole_message_build_command_status(unsigned int status, const char *cmd)
+{
+	return __wormhole_message_build_command(WORMHOLE_OPCODE_COMMAND_STATUS, status, cmd);
+}
+
+static inline bool
+__wormhole_message_protocol_compatible(const struct wormhole_message *msg)
+{
+	return (WORMHOLE_PROTOCOL_MAJOR(msg->version) == WORMHOLE_PROTOCOL_VERSION_MAJOR);
+}
+
+static bool
+__wormhole_message_dissect_header(struct buf *bp, struct wormhole_message *msg, bool consume)
+{
+	unsigned int hdrlen = sizeof(struct wormhole_message);
+
+	if (buf_get(bp, msg, hdrlen) < hdrlen)
 		return false;
 
 	msg->version = ntohs(msg->version);
 	msg->opcode = ntohs(msg->opcode);
 	msg->payload_len = ntohs(msg->payload_len);
 
-	*payloadp = NULL;
-	if (WORMHOLE_PROTOCOL_MAJOR(msg->version) != WORMHOLE_PROTOCOL_VERSION_MAJOR)
-		return true;
+	if (buf_available(bp) < hdrlen + msg->payload_len)
+		return false;
 
-	if (msg->payload_len) {
-		msglen += msg->payload_len;
-		if (avail < msglen)
-			return false;
+	if (consume)
+		__buf_advance_head(bp, hdrlen);
 
-		*payloadp = buf_head(bp) + sizeof(*msg);
+	return true;
+}
+
+bool
+wormhole_message_complete(struct buf *bp)
+{
+	struct wormhole_message msg;
+
+	return __wormhole_message_dissect_header(bp, &msg, false);
+}
+
+struct wormhole_message_parsed *
+wormhole_message_parse(struct buf *bp, uid_t sender_uid)
+{
+	struct wormhole_message_parsed *pmsg;
+
+	pmsg = calloc(1, sizeof(*pmsg));
+
+	if (!__wormhole_message_dissect_header(bp, &pmsg->hdr, true)) {
+		/* should not happen. */
+		log_fatal("%s: unable to parse message header", __func__);
 	}
 
-	__buf_advance_head(bp, msglen);
-	return true;
+	if (!__wormhole_message_protocol_compatible(&pmsg->hdr)) {
+                log_error("message from uid %d: incompatible protocol message (version 0x%x)",
+				sender_uid, pmsg->hdr.version);
+                goto failed;
+        }
+
+	if (pmsg->hdr.payload_len > sizeof(pmsg->payload)) {
+                log_error("message from uid %d: payload of %u bytes too big",
+				sender_uid, pmsg->hdr.payload_len);
+		goto failed;
+	}
+
+	{
+		unsigned int len = pmsg->hdr.payload_len;
+
+		assert(buf_get(bp, &pmsg->payload, len) == len);
+		__buf_advance_head(bp, len);
+	}
+
+	switch (pmsg->hdr.opcode) {
+	case WORMHOLE_OPCODE_STATUS:
+		pmsg->payload.status.status = ntohl(pmsg->payload.status.status);
+		break;
+
+	case WORMHOLE_OPCODE_COMMAND_REQUEST:
+	case WORMHOLE_OPCODE_COMMAND_STATUS:
+		pmsg->payload.command.status = ntohl(pmsg->payload.command.status);
+
+		if (pmsg->payload.command.string[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
+			log_error("message from uid %d: unterminated string argument", sender_uid);
+			goto failed;
+		}
+		break;
+
+	default:
+		log_error("message from uid %d: unexpected opcode %d", sender_uid, pmsg->hdr.opcode);
+		goto failed;
+	}
+
+	return pmsg;
+
+failed:
+	/* FIXME: mark socket for closing */
+	wormhole_message_free_parsed(pmsg);
+	return NULL;
+}
+
+void
+wormhole_message_free_parsed(struct wormhole_message_parsed *pmsg)
+{
+	free(pmsg);
 }

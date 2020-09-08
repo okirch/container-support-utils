@@ -54,8 +54,7 @@ struct wormhole_request {
 	int		version;
 	int		opcode;
 
-	void *		payload;
-	size_t		payload_len;
+	struct wormhole_message_parsed *message;
 
 	unsigned int	socket_id;
 	uid_t		client_uid;
@@ -79,7 +78,7 @@ static bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp
 
 static struct wormhole_request *wormhole_incoming_requests;
 
-static struct wormhole_request *wormhole_request_new(const struct wormhole_message *msg, const void *payload);
+static struct wormhole_request *wormhole_request_new(struct wormhole_message_parsed *pmsg);
 static void			wormhole_request_free(struct wormhole_request *);
 
 static void			wormhole_enqueue_request_incoming(struct wormhole_request *req);
@@ -203,54 +202,47 @@ wormhole_reap_children(void)
 bool
 wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd)
 {
-	struct wormhole_message msg;
-	const void *payload;
+	struct wormhole_message_parsed *pmsg;
 	struct wormhole_request *req;
 
-	if (!wormhole_message_dissect(bp, &msg, &payload))
+	if (!wormhole_message_complete(bp))
 		return false;
 
-	if (WORMHOLE_PROTOCOL_MAJOR(msg.version) != WORMHOLE_PROTOCOL_VERSION_MAJOR) {
-		log_error("incompatible protocol message (version 0x%x) from uid %d",
-				msg.version, s->uid);
+	if (!(pmsg = wormhole_message_parse(bp, s->uid))) {
+		log_error("Bad message from uid %d", s->uid);
 		/* Mark socket for closing */
 		return false;
 	}
 
-	req = wormhole_request_new(&msg, payload);
+	req = wormhole_request_new(pmsg);
 	if (req) {
 		req->socket_id = s->id;
 		req->client_uid = s->uid;
 		wormhole_enqueue_request_incoming(req);
+
+		trace("received message opcode=%d, uid=%d", req->opcode, req->client_uid);
 	}
 
 	return true;
 }
 
 struct wormhole_request *
-wormhole_request_new(const struct wormhole_message *msg, const void *payload)
+wormhole_request_new(struct wormhole_message_parsed *pmsg)
 {
 	struct wormhole_request *r;
 
-	/* Note the +1. This makes sure that any string arguments are NUL terminated */
-	r = calloc(1, sizeof(*r) + msg->payload_len + 1);
+	r = calloc(1, sizeof(*r));
+	r->opcode = pmsg->hdr.opcode;
+	r->version = pmsg->hdr.version;
+	r->message = pmsg;
 
-	r->opcode = msg->opcode;
-	r->version = msg->version;
-
-	if (msg->payload_len) {
-		r->payload = (void *) (r + 1);
-		r->payload_len = msg->payload_len;
-		memcpy(r->payload, payload, r->payload_len);
-	}
-
-	trace("received message opcode=%d payload=%u bytes", r->opcode, r->payload_len);
 	return r;
 }
 
 void
 wormhole_request_free(struct wormhole_request *req)
 {
+	wormhole_message_free_parsed(req->message);
 	memset(req, 0xA5, sizeof(*req));
 	free(req);
 }
@@ -289,22 +281,6 @@ __wormhole_respond(struct wormhole_request *req, struct buf *bp, int fd)
 }
 
 static void
-wormhole_respond_with_fd(struct wormhole_request *req, int fd)
-{
-	struct wormhole_socket *s;
-	struct buf *bp;
-
-	s = wormhole_socket_find(req->socket_id);
-	if (s == NULL)
-		return;
-
-	bp = wormhole_message_build_status(WORMHOLE_STATUS_OK);
-	wormhole_socket_enqueue(s, bp, fd);
-
-	req->reply_sent = true;
-}
-
-static void
 wormhole_respond(struct wormhole_request *req, int status)
 {
 	__wormhole_respond(req, wormhole_message_build_status(status), -1);
@@ -317,7 +293,7 @@ wormhole_process_command(struct wormhole_request *req)
 	struct wormhole_environment *env;
 	struct profile *profile;
 
-	name = (const char *) (req->payload);
+	name = req->message->payload.command.string;
 	trace("Processing request for command \"%s\" from uid %d", name, req->client_uid);
 
 	profile = profile_find(name);
@@ -344,27 +320,22 @@ wormhole_process_command(struct wormhole_request *req)
 
 		/* set up a socket to recv the namespace FD from the child
 		 * process. */
-		/*
-		wormhole_connected_socket_new(env->setup_ctx.sock_fd, 0, 0);
-		setup_sock->app_ops = &app_ops;
-		*/
 		wormhole_install_socket(setup_sock);
 		env->setup_ctx.sock_id = setup_sock->id;
-
-		/*
-		 * Collect child status in mainloop. */
 		return;
 	}
 
 	log_info("served request for a \"%s\" namespace", profile->name);
-	wormhole_respond_with_fd(req, env->nsfd);
+	__wormhole_respond(req,
+		wormhole_message_build_command_status(WORMHOLE_STATUS_OK, profile->command),
+		env->nsfd);
 }
 
 void
 wormhole_process_request(struct wormhole_request *req)
 {
 	switch (req->opcode) {
-	case WORMHOLE_OPCODE_COMMAND:
+	case WORMHOLE_OPCODE_COMMAND_REQUEST:
 		wormhole_process_command(req);
 		break;
 
