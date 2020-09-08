@@ -57,5 +57,6 @@ extern int				profile_setup(struct profile *);
 
 extern struct wormhole_environment *	wormhole_environment_find(const char *name);
 extern struct wormhole_socket *		wormhole_environment_async_setup(struct wormhole_environment *, struct profile *);
+extern bool				wormhole_environment_async_complete(pid_t pid, int status);
 
 #endif // _WORMHOLE_PROFILES_H

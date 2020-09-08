@@ -488,6 +488,19 @@ wormhole_environment_find(const char *name)
 	return wormhole_environment_new(name);
 }
 
+struct wormhole_environment *
+wormhole_environment_find_by_pid(pid_t pid)
+{
+	struct wormhole_environment *env;
+
+	for (env = wormhole_environments; env; env = env->next) {
+		if (env->setup_ctx.child_pid == pid)
+			return env;
+	}
+
+	return NULL;
+}
+
 /*
  * Server side socket handler for receiving namespace fds passed back to us by
  * the async profile setup code.
@@ -559,4 +572,18 @@ wormhole_environment_async_setup(struct wormhole_environment *env, struct profil
 
 	trace("Successfully set up environment \"%s\"", env->name);
 	exit(0);
+}
+
+bool
+wormhole_environment_async_complete(pid_t pid, int status)
+{
+	struct wormhole_environment *env;
+
+	if (!(env = wormhole_environment_find_by_pid(pid)))
+		return false;
+
+	/* Ignore the status for now. What's done is done. */
+	trace("Environment \"%s\": setup process complete", env->name);
+	env->setup_ctx.child_pid = 0;
+	return true;
 }

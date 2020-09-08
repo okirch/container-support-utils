@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/poll.h>
+#include <signal.h>
 #include <syslog.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -45,6 +46,7 @@
 #include "socket.h"
 #include "protocol.h"
 #include "buffer.h"
+#include "util.h"
 
 struct wormhole_request {
 	struct wormhole_request *next;
@@ -71,8 +73,9 @@ static const char *		opt_runtime = "default";
 static bool			opt_foreground = false;
 
 static int			wormhole_daemon(int argc, char **argv);
+static void			wormhole_reap_children(void);
 
-extern bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd);
+static bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd);
 
 static struct wormhole_request *wormhole_incoming_requests;
 
@@ -143,11 +146,15 @@ wormhole_daemon(int argc, char **argv)
 		set_syslog("wormholed", LOG_DAEMON);
 	}
 
+	wormhole_install_sigchild_handler();
+
 	while (wormhole_sockets) {
 		struct pollfd poll_array[WORMHOLE_SOCKET_MAX];
 		struct wormhole_socket *sock_array[WORMHOLE_SOCKET_MAX];
 		struct wormhole_socket **pos, *s;
 		int i, nfd = 0;
+
+		wormhole_reap_children();
 
 		for (pos = &wormhole_sockets; (s = *pos) != NULL; ) {
 			assert(nfd < WORMHOLE_SOCKET_MAX);
@@ -180,6 +187,17 @@ wormhole_daemon(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+static void
+wormhole_reap_children(void)
+{
+	pid_t pid;
+	int st;
+
+	while ((pid = wormhole_get_exited_child(&st)) > 0) {
+		wormhole_environment_async_complete(pid, st);
+	}
 }
 
 bool
