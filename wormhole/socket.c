@@ -20,22 +20,13 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <sys/poll.h>
-#include <syslog.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <string.h>
-#include <dirent.h>
 #include <unistd.h>
-#include <sched.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/mount.h>
-#include <sys/stat.h>
-#include <libgen.h>
-#include <fcntl.h>
-#include <getopt.h>
 #include <errno.h>
 
 #include "tracing.h"

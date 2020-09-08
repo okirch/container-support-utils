@@ -18,7 +18,6 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <sys/wait.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -30,9 +29,7 @@
 #include <stdlib.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
-#include <libgen.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <errno.h>
 
 #include "tracing.h"
