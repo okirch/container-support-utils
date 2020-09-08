@@ -31,8 +31,9 @@ struct path_info {
 #define PATH_INFO_REPLACE_CHILDREN(n)	{ .path = n, .replace = "$ROOT" n "/*" }
 #define PATH_INFO_WORMHOLE(n)	{ .path = n, .replace = "/usr/bin/wormhole" }
 
+typedef struct wormhole_environment wormhole_environment_t;
 struct wormhole_environment {
-	struct wormhole_environment *next;
+	wormhole_environment_t *next;
 
 	char *			name;
 	int			nsfd;
@@ -54,11 +55,11 @@ struct wormhole_profile {
 	struct path_info	path_info[128];
 };
 
-extern wormhole_profile_t *		wormhole_profile_find(const char *argv0);
-extern int				wormhole_profile_setup(wormhole_profile_t *);
+extern wormhole_profile_t *	wormhole_profile_find(const char *argv0);
+extern int			wormhole_profile_setup(wormhole_profile_t *);
 
-extern struct wormhole_environment *	wormhole_environment_find(const char *name);
-extern struct wormhole_socket *		wormhole_environment_async_setup(struct wormhole_environment *, wormhole_profile_t *);
-extern bool				wormhole_environment_async_complete(pid_t pid, int status);
+extern wormhole_environment_t *	wormhole_environment_find(const char *name);
+extern struct wormhole_socket *	wormhole_environment_async_setup(wormhole_environment_t *, wormhole_profile_t *);
+extern bool			wormhole_environment_async_complete(pid_t pid, int status);
 
 #endif // _WORMHOLE_PROFILES_H

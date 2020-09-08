@@ -281,7 +281,7 @@ void
 wormhole_process_command(wormhole_request_t *req)
 {
 	const char *name;
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 	wormhole_profile_t *profile;
 
 	name = req->message->payload.command.string;

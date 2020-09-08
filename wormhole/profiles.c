@@ -38,7 +38,7 @@
 #include "socket.h"
 #include "util.h"
 
-static struct wormhole_environment *	wormhole_environments;
+static wormhole_environment_t *	wormhole_environments;
 
 static wormhole_profile_t		dummy_profiles[] = {
 	{
@@ -445,10 +445,10 @@ wormhole_profile_setup(wormhole_profile_t *profile)
 	return 0;
 }
 
-static struct wormhole_environment *
+static wormhole_environment_t *
 wormhole_environment_new(const char *name)
 {
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 
 	env = calloc(1, sizeof(*env));
 	env->name = strdup(name);
@@ -461,7 +461,7 @@ wormhole_environment_new(const char *name)
 }
 
 static void
-wormhole_environment_set_fd(struct wormhole_environment *env, int fd)
+wormhole_environment_set_fd(wormhole_environment_t *env, int fd)
 {
 	if (env->nsfd >= 0) {
 		close(env->nsfd >= 0);
@@ -472,10 +472,10 @@ wormhole_environment_set_fd(struct wormhole_environment *env, int fd)
 	env->nsfd = fd;
 }
 
-struct wormhole_environment *
+wormhole_environment_t *
 wormhole_environment_find(const char *name)
 {
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 
 	for (env = wormhole_environments; env; env = env->next) {
 		if (!strcmp(env->name, name))
@@ -485,10 +485,10 @@ wormhole_environment_find(const char *name)
 	return wormhole_environment_new(name);
 }
 
-struct wormhole_environment *
+wormhole_environment_t *
 wormhole_environment_find_by_pid(pid_t pid)
 {
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 
 	for (env = wormhole_environments; env; env = env->next) {
 		if (env->setup_ctx.child_pid == pid)
@@ -505,7 +505,7 @@ wormhole_environment_find_by_pid(pid_t pid)
 static bool
 wormhole_environment_fd_received(wormhole_socket_t *s, struct buf *bp, int fd)
 {
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 
 	trace("%s(sock_id=%d)", __func__, s->id);
 	if (fd < 0) {
@@ -526,7 +526,7 @@ wormhole_environment_fd_received(wormhole_socket_t *s, struct buf *bp, int fd)
 }
 
 static wormhole_socket_t *
-wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd)
+wormhole_environment_create_fd_receiver(wormhole_environment_t *env, int fd)
 {
 	static struct wormhole_app_ops app_ops = {
 		.received = wormhole_environment_fd_received,
@@ -542,7 +542,7 @@ wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd
 }
 
 wormhole_socket_t *
-wormhole_environment_async_setup(struct wormhole_environment *env, wormhole_profile_t *profile)
+wormhole_environment_async_setup(wormhole_environment_t *env, wormhole_profile_t *profile)
 {
 	pid_t pid;
 	int nsfd, sock_fd;
@@ -574,7 +574,7 @@ wormhole_environment_async_setup(struct wormhole_environment *env, wormhole_prof
 bool
 wormhole_environment_async_complete(pid_t pid, int status)
 {
-	struct wormhole_environment *env;
+	wormhole_environment_t *env;
 
 	if (!(env = wormhole_environment_find_by_pid(pid)))
 		return false;
