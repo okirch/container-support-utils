@@ -1,6 +1,8 @@
 BINDIR		= /usr/bin
 SBINDIR		= /usr/sbin
-MANDIR		= /usr/share/man/man1
+MAN1DIR		= /usr/share/man/man1
+MAN5DIR		= /usr/share/man/man5
+MAN8DIR		= /usr/share/man/man8
 
 COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I../console $(COPT)
@@ -23,7 +25,8 @@ LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
 
 #MAN1PAGES	= wormhole.1
-#MAN8PAGES	= wormholed.8
+#MAN5PAGES	= wormhole.conf.5
+MAN8PAGES	= wormholed.8
 
 all: $(WORMHOLE) $(WORMHOLED)
 
@@ -40,8 +43,16 @@ install: $(WORMHOLE) $(WORMHOLED)
 	install -m 4555 $(WORMHOLE) $(DESTDIR)$(BINDIR)
 	install -m 555 $(WORMHOLED) $(DESTDIR)$(SBINDIR)
 ifneq ($(MAN1PAGES),)
-	install -m 755 -d $(DESTDIR)$(MANDIR)
-	install -m 444 $(MAN1PAGES) $(DESTDIR)$(MANDIR)
+	install -m 755 -d $(DESTDIR)$(MAN1DIR)
+	install -m 444 $(MAN1PAGES) $(DESTDIR)$(MAN1DIR)
+endif
+ifneq ($(MAN5PAGES),)
+	install -m 755 -d $(DESTDIR)$(MAN5DIR)
+	install -m 444 $(MAN5PAGES) $(DESTDIR)$(MAN5DIR)
+endif
+ifneq ($(MAN8PAGES),)
+	install -m 755 -d $(DESTDIR)$(MAN8DIR)
+	install -m 444 $(MAN8PAGES) $(DESTDIR)$(MAN8DIR)
 endif
 
 $(WORMHOLE): $(WORMHOLE_OBJS) $(LIB)
