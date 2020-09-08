@@ -37,8 +37,9 @@
 #include "buffer.h"
 #include "util.h"
 
+typedef struct wormhole_request wormhole_request_t;
 struct wormhole_request {
-	struct wormhole_request *next;
+	wormhole_request_t *next;
 
 	int		version;
 	int		opcode;
@@ -65,14 +66,14 @@ static void			wormhole_reap_children(void);
 
 static bool			wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd);
 
-static struct wormhole_request *wormhole_incoming_requests;
+static wormhole_request_t *	wormhole_request_list;
 
-static struct wormhole_request *wormhole_request_new(struct wormhole_message_parsed *pmsg);
-static void			wormhole_request_free(struct wormhole_request *);
+static wormhole_request_t *	wormhole_request_new(struct wormhole_message_parsed *pmsg);
+static void			wormhole_request_free(wormhole_request_t *);
 
-static void			wormhole_enqueue_request_incoming(struct wormhole_request *req);
+static void			wormhole_enqueue_request_incoming(wormhole_request_t *req);
 static void			wormhole_process_pending_requests(void);
-static void			wormhole_process_request(struct wormhole_request *req);
+static void			wormhole_process_request(wormhole_request_t *req);
 
 int
 main(int argc, char **argv)
@@ -193,7 +194,7 @@ bool
 wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd)
 {
 	struct wormhole_message_parsed *pmsg;
-	struct wormhole_request *req;
+	wormhole_request_t *req;
 
 	if (!wormhole_message_complete(bp))
 		return false;
@@ -216,10 +217,10 @@ wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd)
 	return true;
 }
 
-struct wormhole_request *
+wormhole_request_t *
 wormhole_request_new(struct wormhole_message_parsed *pmsg)
 {
-	struct wormhole_request *r;
+	wormhole_request_t *r;
 
 	r = calloc(1, sizeof(*r));
 	r->opcode = pmsg->hdr.opcode;
@@ -230,7 +231,7 @@ wormhole_request_new(struct wormhole_message_parsed *pmsg)
 }
 
 void
-wormhole_request_free(struct wormhole_request *req)
+wormhole_request_free(wormhole_request_t *req)
 {
 	wormhole_message_free_parsed(req->message);
 	memset(req, 0xA5, sizeof(*req));
@@ -238,20 +239,20 @@ wormhole_request_free(struct wormhole_request *req)
 }
 
 static void
-wormhole_request_list_insert(struct wormhole_request **list, struct wormhole_request *req)
+wormhole_request_list_insert(wormhole_request_t **list, wormhole_request_t *req)
 {
 	req->next = *list;
 	*list = req;
 }
 
 void
-wormhole_enqueue_request_incoming(struct wormhole_request *req)
+wormhole_enqueue_request_incoming(wormhole_request_t *req)
 {
-	wormhole_request_list_insert(&wormhole_incoming_requests, req);
+	wormhole_request_list_insert(&wormhole_request_list, req);
 }
 
 static bool
-__wormhole_respond(struct wormhole_request *req, struct buf *bp, int fd)
+__wormhole_respond(wormhole_request_t *req, struct buf *bp, int fd)
 {
 	wormhole_socket_t *s;
 	bool ok = false;
@@ -271,13 +272,13 @@ __wormhole_respond(struct wormhole_request *req, struct buf *bp, int fd)
 }
 
 static void
-wormhole_respond(struct wormhole_request *req, int status)
+wormhole_respond(wormhole_request_t *req, int status)
 {
 	__wormhole_respond(req, wormhole_message_build_status(status), -1);
 }
 
 void
-wormhole_process_command(struct wormhole_request *req)
+wormhole_process_command(wormhole_request_t *req)
 {
 	const char *name;
 	struct wormhole_environment *env;
@@ -332,7 +333,7 @@ wormhole_process_command(struct wormhole_request *req)
 }
 
 void
-wormhole_process_request(struct wormhole_request *req)
+wormhole_process_request(wormhole_request_t *req)
 {
 	switch (req->opcode) {
 	case WORMHOLE_OPCODE_COMMAND_REQUEST:
@@ -349,9 +350,9 @@ wormhole_process_request(struct wormhole_request *req)
 void
 wormhole_process_pending_requests(void)
 {
-	struct wormhole_request **pos, *req;
+	wormhole_request_t **pos, *req;
 
-	for (pos = &wormhole_incoming_requests; (req = *pos) != NULL; ) {
+	for (pos = &wormhole_request_list; (req = *pos) != NULL; ) {
 		/* See if we can complete the request. */
 		wormhole_process_request(req);
 
