@@ -25,21 +25,23 @@
 
 struct pollfd;
 
+typedef struct wormhole_socket wormhole_socket_t;
+
 struct wormhole_socket {
-	struct wormhole_socket **prevp;
-	struct wormhole_socket *next;
+	wormhole_socket_t **prevp;
+	wormhole_socket_t *next;
 
 	unsigned int	id;
 	int		fd;
 
 	const struct wormhole_socket_ops {
-		bool	(*poll)(struct wormhole_socket *, struct pollfd *);
-		bool	(*process)(struct wormhole_socket *, struct pollfd *);
+		bool	(*poll)(wormhole_socket_t *, struct pollfd *);
+		bool	(*process)(wormhole_socket_t *, struct pollfd *);
 	} *ops;
 
 	struct wormhole_app_ops {
-		void	(*new_socket)(struct wormhole_socket *);
-		bool	(*received)(struct wormhole_socket *, struct buf *, int);
+		void	(*new_socket)(wormhole_socket_t *);
+		bool	(*received)(wormhole_socket_t *, struct buf *, int);
 	} *app_ops;
 
 	/* FIXME: add idle timeout */
@@ -60,26 +62,26 @@ struct wormhole_socket {
 
 #define WORMHOLE_SOCKET_MAX	1024
 
-extern struct wormhole_socket * wormhole_sockets;
+extern wormhole_socket_t * wormhole_sockets;
 extern unsigned int		wormhole_socket_count;
 
-extern struct wormhole_socket *	wormhole_listen(const char *path, struct wormhole_app_ops *app_ops);
-extern struct wormhole_socket *	wormhole_connect(const char *path, struct wormhole_app_ops *app_ops);
+extern wormhole_socket_t *	wormhole_listen(const char *path, struct wormhole_app_ops *app_ops);
+extern wormhole_socket_t *	wormhole_connect(const char *path, struct wormhole_app_ops *app_ops);
 
-extern struct wormhole_socket *	wormhole_accept_connection(int fd);
-extern struct wormhole_socket *	wormhole_socket_find(unsigned int id);
-extern void			wormhole_socket_free(struct wormhole_socket *conn);
-extern struct wormhole_socket *	wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid);
+extern wormhole_socket_t *	wormhole_accept_connection(int fd);
+extern wormhole_socket_t *	wormhole_socket_find(unsigned int id);
+extern void			wormhole_socket_free(wormhole_socket_t *conn);
+extern wormhole_socket_t *	wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid);
 
-extern void			wormhole_drop_recvbuf(struct wormhole_socket *s);
-extern void			wormhole_drop_sendbuf(struct wormhole_socket *s);
-extern void			wormhole_drop_recvfd(struct wormhole_socket *s);
-extern void			wormhole_drop_sendfd(struct wormhole_socket *s);
+extern void			wormhole_drop_recvbuf(wormhole_socket_t *s);
+extern void			wormhole_drop_sendbuf(wormhole_socket_t *s);
+extern void			wormhole_drop_recvfd(wormhole_socket_t *s);
+extern void			wormhole_drop_sendfd(wormhole_socket_t *s);
 
-extern void			wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd);
+extern void			wormhole_socket_enqueue(wormhole_socket_t *s, struct buf *bp, int fd);
 
-extern void			wormhole_install_socket(struct wormhole_socket *);
-extern void			wormhole_uninstall_socket(struct wormhole_socket *);
+extern void			wormhole_install_socket(wormhole_socket_t *);
+extern void			wormhole_uninstall_socket(wormhole_socket_t *);
 
 extern int			wormhole_socket_recvmsg(int fd, void *buffer, size_t buf_sz, int *fdp);
 extern int			wormhole_socket_sendmsg(int sock_fd, void *payload, unsigned int payload_len, int fd);

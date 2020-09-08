@@ -503,7 +503,7 @@ wormhole_environment_find_by_pid(pid_t pid)
  * the async profile setup code.
  */
 static bool
-wormhole_environment_fd_received(struct wormhole_socket *s, struct buf *bp, int fd)
+wormhole_environment_fd_received(wormhole_socket_t *s, struct buf *bp, int fd)
 {
 	struct wormhole_environment *env;
 
@@ -525,14 +525,14 @@ wormhole_environment_fd_received(struct wormhole_socket *s, struct buf *bp, int 
 	return false;
 }
 
-static struct wormhole_socket *
+static wormhole_socket_t *
 wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd)
 {
 	static struct wormhole_app_ops app_ops = {
 		.received = wormhole_environment_fd_received,
 		// .closed = wormhole_environment_fd_closed,
 	};
-	struct wormhole_socket *sock;
+	wormhole_socket_t *sock;
 
 	sock = wormhole_connected_socket_new(fd, 0, 0);
 	sock->app_ops = &app_ops;
@@ -541,7 +541,7 @@ wormhole_environment_create_fd_receiver(struct wormhole_environment *env, int fd
 	return sock;
 }
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_environment_async_setup(struct wormhole_environment *env, struct profile *profile)
 {
 	pid_t pid;

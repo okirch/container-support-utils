@@ -37,15 +37,15 @@
 #include "protocol.h"
 #include "buffer.h"
 
-static struct wormhole_socket *	__wormhole_socket_accept(int fd, struct wormhole_socket *(*factory)(int, uid_t, gid_t));
+static wormhole_socket_t *	__wormhole_socket_accept(int fd, wormhole_socket_t *(*factory)(int, uid_t, gid_t));
 
-struct wormhole_socket * wormhole_sockets = NULL;
+wormhole_socket_t * wormhole_sockets = NULL;
 unsigned int             wormhole_socket_count = 0;
 
 void
-wormhole_install_socket(struct wormhole_socket *s)
+wormhole_install_socket(wormhole_socket_t *s)
 {
-	struct wormhole_socket **pos;
+	wormhole_socket_t **pos;
 
 	/* brutal for now */
 	assert(wormhole_socket_count < WORMHOLE_SOCKET_MAX);
@@ -65,7 +65,7 @@ wormhole_install_socket(struct wormhole_socket *s)
 }
 
 void
-wormhole_uninstall_socket(struct wormhole_socket *s)
+wormhole_uninstall_socket(wormhole_socket_t *s)
 {
 	if (s->prevp == NULL)
 		return;
@@ -80,10 +80,10 @@ wormhole_uninstall_socket(struct wormhole_socket *s)
 	wormhole_socket_count--;
 }
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_socket_find(unsigned int id)
 {
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 	for (s = wormhole_sockets; s; s = s->next) {
 		if (s->id == id)
 			return s;
@@ -91,11 +91,11 @@ wormhole_socket_find(unsigned int id)
 	return NULL;
 }
 
-static struct wormhole_socket *
+static wormhole_socket_t *
 wormhole_socket_new(const struct wormhole_socket_ops *ops, int fd, uid_t uid, gid_t gid)
 {
 	static unsigned int __wormhole_socket_id = 1;
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 
 	s = calloc(1, sizeof(*s));
 	s->ops = ops;
@@ -114,17 +114,17 @@ wormhole_socket_new(const struct wormhole_socket_ops *ops, int fd, uid_t uid, gi
  * Listening socket
  */
 static bool
-__wormhole_passive_socket_poll(struct wormhole_socket *s, struct pollfd *pfd)
+__wormhole_passive_socket_poll(wormhole_socket_t *s, struct pollfd *pfd)
 {
 	pfd->events = POLLIN;
 	return true;
 }
 
 static bool
-__wormhole_passive_socket_process(struct wormhole_socket *s, struct pollfd *pfd)
+__wormhole_passive_socket_process(wormhole_socket_t *s, struct pollfd *pfd)
 {
 	if (pfd->revents & POLLIN) {
-		struct wormhole_socket *new_sock;
+		wormhole_socket_t *new_sock;
 
 		new_sock = __wormhole_socket_accept(s->fd, wormhole_connected_socket_new);
 		if (new_sock) {
@@ -142,10 +142,10 @@ static struct wormhole_socket_ops __wormhole_passive_socket_ops = {
 	.process	= __wormhole_passive_socket_process,
 };
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_listen(const char *path, struct wormhole_app_ops *app_ops)
 {
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 	struct sockaddr_un sun;
 	int fd;
 
@@ -181,8 +181,8 @@ wormhole_listen(const char *path, struct wormhole_app_ops *app_ops)
 	return s;
 }
 
-static struct wormhole_socket *
-__wormhole_socket_accept(int fd, struct wormhole_socket *(*factory)(int, uid_t, gid_t))
+static wormhole_socket_t *
+__wormhole_socket_accept(int fd, wormhole_socket_t *(*factory)(int, uid_t, gid_t))
 {
 	int cfd;
 	struct ucred cred;
@@ -204,7 +204,7 @@ __wormhole_socket_accept(int fd, struct wormhole_socket *(*factory)(int, uid_t, 
 	return factory(cfd, cred.uid, cred.gid);
 }
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_accept_connection(int fd)
 {
 	return __wormhole_socket_accept(fd, wormhole_connected_socket_new);
@@ -282,7 +282,7 @@ scm_rights_process(struct cmsghdr *cmsg, int *recv_fd)
 }
 
 static bool
-__wormhole_socket_recv(struct wormhole_socket *s, struct buf *bp, int *fdp)
+__wormhole_socket_recv(wormhole_socket_t *s, struct buf *bp, int *fdp)
 {
 	int n;
 
@@ -336,7 +336,7 @@ wormhole_socket_sendmsg(int sock_fd, void *payload, unsigned int payload_len, in
 }
 
 static bool
-__wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
+__wormhole_socket_send(wormhole_socket_t *s, struct buf *bp, int fd)
 {
 	int sent;
 
@@ -355,7 +355,7 @@ __wormhole_socket_send(struct wormhole_socket *s, struct buf *bp, int fd)
  * Connected stream socket
  */
 static bool
-__wormhole_connected_socket_poll(struct wormhole_socket *s, struct pollfd *pfd)
+__wormhole_connected_socket_poll(wormhole_socket_t *s, struct pollfd *pfd)
 {
 	pfd->events = 0;
 	if (s->sendbuf) {
@@ -367,7 +367,7 @@ __wormhole_connected_socket_poll(struct wormhole_socket *s, struct pollfd *pfd)
 }
 
 static bool
-__wormhole_connected_socket_process(struct wormhole_socket *s, struct pollfd *pfd)
+__wormhole_connected_socket_process(wormhole_socket_t *s, struct pollfd *pfd)
 {
 	if (pfd->revents & POLLHUP)
 		s->recv_closed = true;
@@ -415,16 +415,16 @@ static struct wormhole_socket_ops __wormhole_connected_socket_ops = {
 	.process	= __wormhole_connected_socket_process,
 };
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
 {
 	return wormhole_socket_new(&__wormhole_connected_socket_ops, fd, uid, gid);
 }
 
-struct wormhole_socket *
+wormhole_socket_t *
 wormhole_connect(const char *path, struct wormhole_app_ops *app_ops)
 {
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 	struct sockaddr_un sun;
 	int fd;
 
@@ -449,7 +449,7 @@ wormhole_connect(const char *path, struct wormhole_app_ops *app_ops)
 
 
 void
-wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd)
+wormhole_socket_enqueue(wormhole_socket_t *s, struct buf *bp, int fd)
 {
 	assert(s->ops == &__wormhole_connected_socket_ops);
 	assert(s->sendbuf == NULL);
@@ -462,7 +462,7 @@ wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd)
 }
 
 void
-wormhole_drop_recvbuf(struct wormhole_socket *s)
+wormhole_drop_recvbuf(wormhole_socket_t *s)
 {
 	if (s->recvbuf) {
 		buf_free(s->recvbuf);
@@ -471,7 +471,7 @@ wormhole_drop_recvbuf(struct wormhole_socket *s)
 }
 
 void
-wormhole_drop_recvfd(struct wormhole_socket *s)
+wormhole_drop_recvfd(wormhole_socket_t *s)
 {
 	if (s->recvfd >= 0) {
 		close(s->recvfd);
@@ -480,7 +480,7 @@ wormhole_drop_recvfd(struct wormhole_socket *s)
 }
 
 void
-wormhole_drop_sendbuf(struct wormhole_socket *s)
+wormhole_drop_sendbuf(wormhole_socket_t *s)
 {
 	if (s->sendbuf) {
 		buf_free(s->sendbuf);
@@ -489,7 +489,7 @@ wormhole_drop_sendbuf(struct wormhole_socket *s)
 }
 
 void
-wormhole_drop_sendfd(struct wormhole_socket *s)
+wormhole_drop_sendfd(wormhole_socket_t *s)
 {
 	if (s->sendfd >= 0) {
 		close(s->sendfd);
@@ -498,7 +498,7 @@ wormhole_drop_sendfd(struct wormhole_socket *s)
 }
 
 void
-wormhole_socket_free(struct wormhole_socket *s)
+wormhole_socket_free(wormhole_socket_t *s)
 {
 	wormhole_uninstall_socket(s);
 

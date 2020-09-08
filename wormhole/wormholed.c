@@ -63,7 +63,7 @@ static bool			opt_foreground = false;
 static int			wormhole_daemon(int argc, char **argv);
 static void			wormhole_reap_children(void);
 
-static bool			wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd);
+static bool			wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd);
 
 static struct wormhole_request *wormhole_incoming_requests;
 
@@ -114,7 +114,7 @@ wormhole_daemon(int argc, char **argv)
 		.new_socket = wormhole_install_socket,
 		.received = wormhole_message_consume,
 	};
-	struct wormhole_socket *srv_sock;
+	wormhole_socket_t *srv_sock;
 
 	srv_sock = wormhole_listen(WORMHOLE_SOCKET_PATH, &app_ops);
 	if (srv_sock == NULL) {
@@ -138,8 +138,8 @@ wormhole_daemon(int argc, char **argv)
 
 	while (wormhole_sockets) {
 		struct pollfd poll_array[WORMHOLE_SOCKET_MAX];
-		struct wormhole_socket *sock_array[WORMHOLE_SOCKET_MAX];
-		struct wormhole_socket **pos, *s;
+		wormhole_socket_t *sock_array[WORMHOLE_SOCKET_MAX];
+		wormhole_socket_t **pos, *s;
 		int i, nfd = 0;
 
 		wormhole_reap_children();
@@ -190,7 +190,7 @@ wormhole_reap_children(void)
 }
 
 bool
-wormhole_message_consume(struct wormhole_socket *s, struct buf *bp, int fd)
+wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd)
 {
 	struct wormhole_message_parsed *pmsg;
 	struct wormhole_request *req;
@@ -253,7 +253,7 @@ wormhole_enqueue_request_incoming(struct wormhole_request *req)
 static bool
 __wormhole_respond(struct wormhole_request *req, struct buf *bp, int fd)
 {
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 	bool ok = false;
 
 	s = wormhole_socket_find(req->socket_id);
@@ -304,7 +304,7 @@ wormhole_process_command(struct wormhole_request *req)
 	}
 
 	if (env->nsfd < 0) {
-		struct wormhole_socket *setup_sock;
+		wormhole_socket_t *setup_sock;
 
 		if (env->setup_ctx.child_pid != 0) {
 			trace("setup for \"%s\" is in process, delaying", env->name);

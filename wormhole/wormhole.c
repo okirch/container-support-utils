@@ -172,7 +172,7 @@ int
 wormhole_client(int argc, char **argv)
 {
 	char pathbuf[PATH_MAX];
-	struct wormhole_socket *s;
+	wormhole_socket_t *s;
 	int fd, nsfd = -1;
 
 	s = wormhole_connect(WORMHOLE_SOCKET_PATH, NULL);
