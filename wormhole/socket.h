@@ -64,6 +64,8 @@ extern struct wormhole_socket * wormhole_sockets;
 extern unsigned int		wormhole_socket_count;
 
 extern struct wormhole_socket *	wormhole_listen(const char *path, struct wormhole_app_ops *app_ops);
+extern struct wormhole_socket *	wormhole_connect(const char *path, struct wormhole_app_ops *app_ops);
+
 extern struct wormhole_socket *	wormhole_accept_connection(int fd);
 extern struct wormhole_socket *	wormhole_socket_find(unsigned int id);
 extern void			wormhole_socket_free(struct wormhole_socket *conn);

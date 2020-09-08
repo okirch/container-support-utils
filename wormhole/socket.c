@@ -430,6 +430,33 @@ wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
 	return wormhole_socket_new(&__wormhole_connected_socket_ops, fd, uid, gid);
 }
 
+struct wormhole_socket *
+wormhole_connect(const char *path, struct wormhole_app_ops *app_ops)
+{
+	struct wormhole_socket *s;
+	struct sockaddr_un sun;
+	int fd;
+
+	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
+		log_error("unable to create PF_LOCAL stream socket: %m");
+		return NULL;
+	}
+
+	memset(&sun, 0, sizeof(sun));
+	sun.sun_family = AF_LOCAL;
+	strcpy(sun.sun_path, path);
+	if (connect(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
+		log_error("cannot connect to %s: %m", path);
+		close(fd);
+		return NULL;
+	}
+
+	s = wormhole_connected_socket_new(fd, 0, 0);
+	s->app_ops = app_ops;
+	return s;
+}
+
+
 void
 wormhole_socket_enqueue(struct wormhole_socket *s, struct buf *bp, int fd)
 {

@@ -179,23 +179,17 @@ failed:
 int
 wormhole_client(int argc, char **argv)
 {
-	struct sockaddr_un sun;
 	char pathbuf[PATH_MAX];
+	struct wormhole_socket *s;
 	int fd, nsfd = -1;
 
-	fd = socket(PF_LOCAL, SOCK_STREAM, 0);
-	if (fd < 0) {
-		log_error("socket: %m");
+	s = wormhole_connect(WORMHOLE_SOCKET_PATH, NULL);
+	if (s == NULL) {
+		log_error("Unable to connect to wormhole daemon");
 		return 2;
 	}
 
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, WORMHOLE_SOCKET_PATH);
-	if (connect(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		log_error("connect: %m");
-		return 1;
-	}
+	fd = s->fd;
 
 	if (wormhole_send_command(fd, argv[0]) < 0)
 		return 1;
