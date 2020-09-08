@@ -1,5 +1,13 @@
-
 Things to be done
+
+Wormhole
+
+ - support config file for profile definition
+ - daemon should use a pid file
+ - make the logging more useful (and redirect any less interesting stuff to a log file)
+
+
+sidecar
 
  - testing this with kubernetes. Right now, I've only tried this
    with podman
@@ -20,3 +28,4 @@ Things to be done
 Console
 
  - use libssh to provide session layer
+
