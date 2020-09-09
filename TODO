@@ -2,13 +2,15 @@ Things to be done
 
 Wormhole
 
- - support config file for profile definition
+ - config handling:
+    - re-read config files after SIGHUP
+    - allow for (command) profiles to be enabled always, and only within
+      certain contexts
  - time out requests that do not complete
  - daemon should use a pid file
  - make the logging more useful (and redirect any less interesting stuff to a log file)
  - client should pass its current namespace to the daemon so that we can detect
    which ns it runs in.
- - allow nested environment settings
 
 sidecar
 
