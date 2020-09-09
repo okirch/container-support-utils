@@ -23,6 +23,12 @@
 
 #include <sys/types.h>
 
+struct fsutil_tempdir {
+	char *		path;
+	bool		mounted;
+};
+
+
 extern const char *		wormhole_const_basename(const char *path);
 extern const char *		wormhole_concat_argv(int argc, char **argv);
 extern pid_t			wormhole_fork_with_socket(int *fdp);
@@ -30,5 +36,9 @@ extern void			wormhole_install_sigchild_handler(void);
 extern pid_t			wormhole_get_exited_child(int *status);
 extern bool			wormhole_child_status_okay(int status);
 extern const char *		wormhole_child_status_describe(int status);
+
+extern void			fsutil_tempdir_init(struct fsutil_tempdir *td);
+extern char *			fsutil_tempdir_path(struct fsutil_tempdir *td);
+extern int			fsutil_tempdir_cleanup(struct fsutil_tempdir *td);
 
 #endif // _WORMHOLE_UTIL_H

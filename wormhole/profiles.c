@@ -188,61 +188,6 @@ pathinfo_expand(const wormhole_profile_t *profile, const char *path)
 	return expanded;
 }
 
-struct fsutil_tempdir {
-	char *		path;
-	bool		mounted;
-};
-
-void
-fsutil_tempdir_init(struct fsutil_tempdir *td)
-{
-	memset(td, 0, sizeof(*td));
-}
-
-char *
-fsutil_tempdir_path(struct fsutil_tempdir *td)
-{
-	if (td->path == NULL) {
-		char dirtemplate[] = "/tmp/mounts.XXXXXX";
-		char *tempdir;
-
-		tempdir = mkdtemp(dirtemplate);
-		if (tempdir == NULL)
-			log_fatal("Unable to create tempdir: %m\n");
-
-		td->path = strdup(tempdir);
-
-		trace("Mounting tmpfs on %s\n", tempdir);
-		if (mount("tmpfs", tempdir, "tmpfs", 0, NULL) < 0)
-			log_fatal("Unable to mount tmpfs in container: %m\n");
-
-		td->mounted = true;
-	}
-
-	return td->path;
-}
-
-int
-fsutil_tempdir_cleanup(struct fsutil_tempdir *td)
-{
-	if (td->path == NULL)
-		return 0;
-
-	if (td->mounted && umount(td->path) < 0) {
-                log_error("Unable to unmount %s: %m", td->path);
-		return -1;
-        }
-
-        if (rmdir(td->path) < 0) {
-                log_error("Unable to remove temporary mountpoint %s: %m", td->path);
-		return -1;
-        }
-
-	free(td->path);
-	memset(td, 0, sizeof(*td));
-	return 0;
-}
-
 static int
 _pathinfo_bind_one(wormhole_profile_t *profile, const char *source, const char *target)
 {

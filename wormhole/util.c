@@ -20,6 +20,7 @@
 
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -185,3 +186,54 @@ wormhole_child_status_describe(int status)
 	}
 	return msgbuf;
 }
+
+void
+fsutil_tempdir_init(struct fsutil_tempdir *td)
+{
+	memset(td, 0, sizeof(*td));
+}
+
+char *
+fsutil_tempdir_path(struct fsutil_tempdir *td)
+{
+	if (td->path == NULL) {
+		char dirtemplate[] = "/tmp/mounts.XXXXXX";
+		char *tempdir;
+
+		tempdir = mkdtemp(dirtemplate);
+		if (tempdir == NULL)
+			log_fatal("Unable to create tempdir: %m\n");
+
+		td->path = strdup(tempdir);
+
+		trace("Mounting tmpfs on %s\n", tempdir);
+		if (mount("tmpfs", tempdir, "tmpfs", 0, NULL) < 0)
+			log_fatal("Unable to mount tmpfs in container: %m\n");
+
+		td->mounted = true;
+	}
+
+	return td->path;
+}
+
+int
+fsutil_tempdir_cleanup(struct fsutil_tempdir *td)
+{
+	if (td->path == NULL)
+		return 0;
+
+	if (td->mounted && umount(td->path) < 0) {
+                log_error("Unable to unmount %s: %m", td->path);
+		return -1;
+        }
+
+        if (rmdir(td->path) < 0) {
+                log_error("Unable to remove temporary mountpoint %s: %m", td->path);
+		return -1;
+        }
+
+	free(td->path);
+	memset(td, 0, sizeof(*td));
+	return 0;
+}
+
