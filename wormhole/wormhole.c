@@ -199,6 +199,9 @@ wormhole_client(int argc, char **argv)
 		return 2;
 	}
 
+	/* We no longer need this fd and should not pass it on to the executed command */
+	close(nsfd);
+
 	/* Drop uid/gid back to those of the calling user. */
 	setgid(getgid());
 	setuid(getuid());
