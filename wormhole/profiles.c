@@ -32,14 +32,113 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "wormhole.h"
 #include "tracing.h"
 #include "profiles.h"
+#include "config.h"
 #include "runtime.h"
 #include "socket.h"
 #include "util.h"
 
+static wormhole_profile_t *	wormhole_profiles;
 static wormhole_environment_t *	wormhole_environments;
+static const char *		wormhole_client_path;
+static bool			__trace_verbose = false;
 
+static bool			__wormhole_profiles_configure_environments(struct wormhole_environment_config *list);
+static bool			__wormhole_profiles_configure_profiles(struct wormhole_profile_config *list);
+
+static wormhole_environment_t *	wormhole_environment_new(const char *name);
+static wormhole_profile_t *	wormhole_profile_new(const char *name);
+
+#define trace2(msg...)		do { if (__trace_verbose) trace(msg); } while (0)
+
+/*
+ * Initialize our internal data structures from config
+ */
+bool
+wormhole_profiles_configure(struct wormhole_config *cfg)
+{
+	wormhole_client_path = cfg->client_path;
+	if (wormhole_client_path == NULL)
+		wormhole_client_path = WORMHOLE_CLIENT_PATH;
+
+	__wormhole_profiles_configure_environments(cfg->environments);
+	__wormhole_profiles_configure_profiles(cfg->profiles);
+	return true;
+}
+
+wormhole_environment_t *
+__wormhole_environment_from_config(struct wormhole_environment_config *cfg)
+{
+	wormhole_environment_t *env;
+
+	env = wormhole_environment_new(cfg->name);
+	env->config = cfg;
+
+	return env;
+}
+
+bool
+__wormhole_profiles_configure_environments(struct wormhole_environment_config *list)
+{
+	wormhole_environment_t **tail = &wormhole_environments;
+	struct wormhole_environment_config *cfg;
+
+	for (cfg = list; cfg; cfg = cfg->next) {
+		wormhole_environment_t *env;
+
+		if (!(env = __wormhole_environment_from_config(cfg)))
+			return false;
+
+		*tail = env;
+		tail = &env->next;
+	}
+
+	return true;
+}
+
+static wormhole_profile_t *
+__wormhole_profile_from_config(struct wormhole_profile_config *cfg)
+{
+	wormhole_environment_t *env = NULL;
+	wormhole_profile_t *profile;
+
+	if (cfg->environment) {
+		if ((env = wormhole_environment_find(cfg->environment)) == NULL) {
+			log_error("Profile %s references environment \"%s\", which does not exist",
+					cfg->name, cfg->environment);
+			return NULL;
+		}
+	}
+
+	profile = wormhole_profile_new(cfg->name);
+	profile->config = cfg;
+	profile->environment = env;
+
+	return profile;
+}
+
+bool
+__wormhole_profiles_configure_profiles(struct wormhole_profile_config *list)
+{
+	wormhole_profile_t **tail = &wormhole_profiles;
+	struct wormhole_profile_config *cfg;
+
+	for (cfg = list; cfg; cfg = cfg->next) {
+		wormhole_profile_t *profile;
+
+		if (!(profile = __wormhole_profile_from_config(cfg)))
+			return false;
+
+		*tail = profile;
+		tail = &profile->next;
+	}
+
+	return true;
+}
+
+#if 0
 static wormhole_profile_t		dummy_profiles[] = {
 	{
 		.name =			"ps",
@@ -77,6 +176,18 @@ static wormhole_profile_t		dummy_profiles[] = {
 	},
 	{ NULL }
 };
+#endif
+
+wormhole_profile_t *
+wormhole_profile_new(const char *name)
+{
+	wormhole_profile_t *profile;
+
+	profile = calloc(1, sizeof(*profile));
+	profile->name = strdup(name);
+
+	return profile;
+}
 
 wormhole_profile_t *
 wormhole_profile_find(const char *argv0)
@@ -90,7 +201,7 @@ wormhole_profile_find(const char *argv0)
 		return NULL;
 	}
 
-	for (profile = dummy_profiles; profile->name; ++profile) {
+	for (profile = wormhole_profiles; profile; profile = profile->next) {
 		if (!strcmp(name, profile->name))
 			return profile;
 	}
@@ -98,25 +209,73 @@ wormhole_profile_find(const char *argv0)
 	return NULL;
 }
 
+static wormhole_environment_t *
+wormhole_environment_new(const char *name)
+{
+	wormhole_environment_t *env;
+
+	env = calloc(1, sizeof(*env));
+	env->name = strdup(name);
+	env->nsfd = -1;
+
+	return env;
+}
+
+static void
+wormhole_environment_set_fd(wormhole_environment_t *env, int fd)
+{
+	if (env->nsfd >= 0) {
+		close(env->nsfd >= 0);
+		env->nsfd = -1;
+	}
+
+	trace("Environment \"%s\": installing namespace fd %d", env->name, fd);
+	env->nsfd = fd;
+}
+
+wormhole_environment_t *
+wormhole_environment_find(const char *name)
+{
+	wormhole_environment_t *env;
+
+	for (env = wormhole_environments; env; env = env->next) {
+		if (!strcmp(env->name, name))
+			return env;
+	}
+
+	return NULL;
+}
+
+wormhole_environment_t *
+wormhole_environment_find_by_pid(pid_t pid)
+{
+	wormhole_environment_t *env;
+
+	for (env = wormhole_environments; env; env = env->next) {
+		if (env->setup_ctx.child_pid == pid)
+			return env;
+	}
+
+	return NULL;
+}
+
+
 /*
  * Start a container for this image, and mount its file system.
  */
+/* The following should be part of the container runtime facade */
 static const char *
-profile_make_local_name(wormhole_profile_t *profile)
+container_make_local_name(const char *image_name)
 {
 	static char local_buf[128];
 	char *s;
 
-	if (!profile->container_image) {
-		log_error("Profile \"%s\" does not have a container image defined", profile->name);
-		return NULL;
-	}
-	if (strlen(profile->container_image) >= sizeof(local_buf)) {
-		log_error("Profile \"%s\": image name \"%s\" is too long", profile->name, profile->container_image);
+	if (strlen(image_name) >= sizeof(local_buf)) {
+		log_error("Container image name \"%s\" is too long", image_name);
 		return NULL;
 	}
 
-	strcpy(local_buf, profile->container_image);
+	strcpy(local_buf, image_name);
 
 	if ((s = strchr(local_buf, ':')) != NULL)
 		*s = '\0';
@@ -127,29 +286,30 @@ profile_make_local_name(wormhole_profile_t *profile)
 	return local_buf;
 }
 
-bool
-profile_mount(wormhole_profile_t *profile)
+static const char *
+overlay_container_mount(const wormhole_environment_t *env, const char *container_image)
 {
 	const char *local_name;
-	const char *mount_point;
 
-	if (profile->mount_point)
-		return true;
-
-	if (!(local_name = profile_make_local_name(profile)))
-		return false;
-
-	if (!wormhole_container_exists(local_name)) {
-		if (!wormhole_container_start(profile->container_image, local_name))
-			return false;
+	if (container_image == NULL) {
+		log_error("Environment \"%s\" does not have a container image defined", env->name);
+		return NULL;
 	}
 
-	mount_point = wormhole_container_mount(local_name);
-	if (!mount_point)
-		return false;
+	if (!(local_name = container_make_local_name(container_image)))
+		return NULL;
 
-	profile->mount_point = strdup(mount_point);
+	if (!wormhole_container_exists(local_name)) {
+		if (!wormhole_container_start(container_image, local_name))
+			return NULL;
+	}
 
+	return wormhole_container_mount(local_name);
+}
+
+static bool
+overlay_container_unmount(const wormhole_environment_t *env, const char *container_image, const char *mount_point)
+{
 	return true;
 }
 
@@ -173,37 +333,42 @@ dump_mtab(const char *msg)
 	fclose(fp);
 }
 
-
-static char *
-pathinfo_expand(const wormhole_profile_t *profile, const char *path)
+/*
+ * pathinfo related functions
+ */
+static const char *
+pathinfo_type_string(int type)
 {
-	static char expanded[PATH_MAX];
-
-	if (!strncmp(path, "$ROOT/", 6)) {
-		snprintf(expanded, sizeof(expanded), "%s/%s", profile->mount_point, path + 6);
-	} else {
-		strncpy(expanded, path, sizeof(expanded));
+	switch (type) {
+	case WORMHOLE_PATH_TYPE_HIDE:
+		return "HIDE";
+	case WORMHOLE_PATH_TYPE_OVERLAY:
+		return "OVERLAY";
+	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
+		return "OVERLAY_CHILDREN";
+	case WORMHOLE_PATH_TYPE_WORMHOLE:
+		return "WORMHOLE";
 	}
-	expanded[sizeof(expanded) - 1] = '\0';
-	return expanded;
+
+	return "UNKNOWN";
 }
 
-static int
-_pathinfo_bind_one(wormhole_profile_t *profile, const char *source, const char *target)
+static bool
+_pathinfo_bind_one(wormhole_environment_t *environment, const char *source, const char *target)
 {
 	if (mount(source, target, NULL, MS_BIND, NULL) < 0) {
-		log_error("%s: unable to bind mount %s to %s: %m", profile->name, source, target);
-		return -1;
+		log_error("%s: unable to bind mount %s to %s: %m", environment->name, source, target);
+		return false;
 	}
 
-	trace("%s: bind mounted %s to %s", profile->name, source, target);
-	return 0;
+	trace2("%s: bind mounted %s to %s", environment->name, source, target);
+	return true;
 }
 
-static int
-pathinfo_bind_directory(wormhole_profile_t *profile, struct path_info *pi, const char *source)
+static bool
+pathinfo_bind_directory(wormhole_environment_t *environment, const struct path_info *pi, const char *source)
 {
-	return _pathinfo_bind_one(profile, source, pi->path);
+	return _pathinfo_bind_one(environment, source, pi->path);
 }
 
 static int
@@ -240,19 +405,20 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 	return 0;
 }
 
-static int
-pathinfo_bind_children(wormhole_profile_t *profile, struct path_info *pi, const char *source)
+static bool
+pathinfo_bind_children(wormhole_environment_t *environment, const struct path_info *pi, const char *source)
 {
 	struct fsutil_tempdir td;
 	const char *tempdir;
 	struct dirent *d;
 	DIR *dirfd;
-	int rv = -1;
+	unsigned int num_mounted = 0;
+	bool ok = false;
 
 	dirfd = opendir(source);
 	if (dirfd == NULL) {
-		log_error("%s: unable to open dir %s: %m", profile->name, source);
-		return -1;
+		log_error("%s: unable to open dir %s: %m", environment->name, source);
+		return false;
 	}
 
 	fsutil_tempdir_init(&td);
@@ -290,67 +456,132 @@ pathinfo_bind_children(wormhole_profile_t *profile, struct path_info *pi, const 
 			}
 		}
 
-		if (_pathinfo_bind_one(profile, source_entry, target_entry) < 0)
+		if (!_pathinfo_bind_one(environment, source_entry, target_entry))
 			goto out;
+
+		num_mounted ++;
 	}
 
-	rv = 0;
+	trace("Mounted %u entries", num_mounted);
+	ok = true;
 
 out:
 	fsutil_tempdir_cleanup(&td);
 	if (dirfd)
 		closedir(dirfd);
-	return rv;
+	return ok;
 }
 
-static int
-pathinfo_process(wormhole_profile_t *profile, struct path_info *pi)
+static bool
+pathinfo_bind_wormhole(wormhole_environment_t *environment, const struct path_info *pi)
 {
-	int (*bind_fn)(wormhole_profile_t *, struct path_info *, const char *) = pathinfo_bind_directory;
-	char *source;
-	int len;
+	return _pathinfo_bind_one(environment, wormhole_client_path, pi->path);
+}
 
-	if (pi->replace == NULL) {
+static bool
+pathinfo_process(wormhole_environment_t *env, const struct path_info *pi, const char *overlay_root)
+{
+	char source[PATH_MAX];
+
+	if (pi->type == WORMHOLE_PATH_TYPE_HIDE) {
 		/* hiding is not yet implemented */
-		log_error("%s: do not know how to hide %s - no yet implemented", profile->name, pi->path);
-		return -1;
+		log_error("Environment %s: do not know how to hide %s - no yet implemented", env->name, pi->path);
+		return false;
 	}
 
-	source = pathinfo_expand(profile, pi->replace);
-	if (source == NULL) {
-		log_error("%s: unable to expand \"%s\"", profile->name, pi->path);
-		return -1;
+	if (overlay_root == NULL) {
+		log_error("Environment %s: requested overlay for \"%s\", but no image or directory given", env->name, pi->path);
+		return false;
 	}
 
-	len = strlen(source);
-	if (len >= 2 && !strcmp(source + len - 2, "/*")) {
-		bind_fn = pathinfo_bind_children;
-		source[len-2] = '\0';
+	/* We check for this in the config file parsing code, so an assert is good enough here. */
+	assert(pi->path[0] == '/');
+	snprintf(source, sizeof(source), "%s%s", overlay_root, pi->path);
+
+	switch (pi->type) {
+	case WORMHOLE_PATH_TYPE_OVERLAY:
+		trace2("pathinfo_bind_directory(%s, %s)", pi->path, source);
+		return pathinfo_bind_directory(env, pi, source);
+
+	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
+		trace2("pathinfo_bind_children(%s, %s)", pi->path, source);
+		return pathinfo_bind_children(env, pi, source);
+
+	case WORMHOLE_PATH_TYPE_WORMHOLE:
+		trace2("pathinfo_bind_wormhole(%s)", pi->path);
+		return pathinfo_bind_wormhole(env, pi);
+
+	default:
+		log_error("Environment %s: unsupported path_info type %d", env->name, pi->type);
+		return false;
+	}
+}
+
+static bool
+wormhole_overlay_setup(wormhole_environment_t *env, const struct wormhole_overlay_config *overlay)
+{
+	const char *overlay_root;
+	const struct path_info *pi;
+	bool mounted = false;
+	bool ok = true;
+	unsigned int i;
+
+	if (overlay->npaths == 0)
+		return true;
+
+	if (overlay->image) {
+		/* The overlay is provided via a container image. */
+		overlay_root = overlay_container_mount(env, overlay->image);
+		if (!overlay_root)
+			log_error("Environment %s: unable to mount container \"%s\"", env->name, overlay->image);
+		mounted = true;
+	} else {
+		assert(overlay->directory);
+		overlay_root = overlay->directory;
 	}
 
-	if (!strcmp(source, pi->path)) {
-		log_error("%s: refusing to bind mount %s to %s", profile->name,
-				source, pi->path);
-		return -1;
+	for (i = 0, pi = overlay->path; ok && i < overlay->npaths; ++i, ++pi) {
+		trace("Environment %s: pathinfo %s: %s", env->name,
+				pathinfo_type_string(pi->type), pi->path);
+		ok = pathinfo_process(env, pi, overlay_root);
+		trace("  result: %sok", ok? "" : "not ");
 	}
 
-	return bind_fn(profile, pi, source);
+	if (mounted && !overlay_container_unmount(env, overlay->image, overlay_root)) {
+		log_error("Environment %s: unable to unmount \"%s\": %m", env->name, overlay_root);
+		ok = false;
+	}
+
+	return ok;
+}
+
+static bool
+wormhole_environment_setup(wormhole_environment_t *env)
+{
+	struct wormhole_overlay_config *overlay;
+
+	if (env->failed)
+		return false;
+
+	for (overlay = env->config->overlays; overlay; overlay = overlay->next) {
+		if (!wormhole_overlay_setup(env, overlay))
+			return false;
+	}
+
+	return true;
 }
 
 int
 wormhole_profile_setup(wormhole_profile_t *profile)
 {
-	struct path_info *pi;
 	struct stat stb1, stb2;
 
-	/* No image means: execute command in the host context */
-	if (!profile->container_image)
+	/* No environment or no overlays - use the root context */
+	if (profile->environment == NULL)
 		return 0;
 
-	if (!profile_mount(profile))
-		return -1;
-
-	if (profile->path_info[0].path == NULL)
+	assert(profile->environment->config);
+	if (profile->environment->config->overlays == NULL)
 		return 0;
 
 	if (mount("none", "/", NULL, MS_REC|MS_PRIVATE, NULL) == -1) {
@@ -382,65 +613,31 @@ wormhole_profile_setup(wormhole_profile_t *profile)
 			stb2.st_dev, stb2.st_ino);
 #endif
 
-	for (pi = profile->path_info; pi->path; ++pi) {
-		if (pathinfo_process(profile, pi) < 0)
-			return -1;
-	}
+	if (!wormhole_environment_setup(profile->environment))
+		return -1;
 
 	return 0;
 }
 
-static wormhole_environment_t *
-wormhole_environment_new(const char *name)
+const char *
+wormhole_profile_command(const wormhole_profile_t *profile)
+{
+	return profile->config->command;
+}
+
+int
+wormhole_profile_namespace_fd(const wormhole_profile_t *profile)
 {
 	wormhole_environment_t *env;
 
-	env = calloc(1, sizeof(*env));
-	env->name = strdup(name);
-	env->nsfd = -1;
-
-	env->next = wormhole_environments;
-	wormhole_environments = env;
-
-	return env;
-}
-
-static void
-wormhole_environment_set_fd(wormhole_environment_t *env, int fd)
-{
-	if (env->nsfd >= 0) {
-		close(env->nsfd >= 0);
-		env->nsfd = -1;
+	if ((env = profile->environment) == NULL) {
+		assert(0);
+		return -1; /* not correct */
 	}
 
-	trace("Environment \"%s\": installing namespace fd %d", env->name, fd);
-	env->nsfd = fd;
-}
-
-wormhole_environment_t *
-wormhole_environment_find(const char *name)
-{
-	wormhole_environment_t *env;
-
-	for (env = wormhole_environments; env; env = env->next) {
-		if (!strcmp(env->name, name))
-			return env;
-	}
-
-	return wormhole_environment_new(name);
-}
-
-wormhole_environment_t *
-wormhole_environment_find_by_pid(pid_t pid)
-{
-	wormhole_environment_t *env;
-
-	for (env = wormhole_environments; env; env = env->next) {
-		if (env->setup_ctx.child_pid == pid)
-			return env;
-	}
-
-	return NULL;
+	if (env->failed)
+		return -1;
+	return env->nsfd;
 }
 
 /*

@@ -79,6 +79,7 @@ static void			wormhole_process_request(wormhole_request_t *req);
 int
 main(int argc, char **argv)
 {
+	struct wormhole_config *config;
 	int c;
 
 	while ((c = getopt_long(argc, argv, "d", wormhole_options, NULL)) != EOF) {
@@ -101,8 +102,11 @@ main(int argc, char **argv)
 	if (!wormhole_select_runtime(opt_runtime))
 		log_fatal("Unable to set up requested container runtime");
 
-	if (!wormhole_config_load(WORMHOLE_CONFIG_PATH))
+	if (!(config = wormhole_config_load(WORMHOLE_CONFIG_PATH)))
 		log_fatal("Unable to load configuration file");
+
+	if (!wormhole_profiles_configure(config))
+		log_fatal("Bad configuration, cannot continue.");
 
 	return wormhole_daemon();
 }
@@ -282,6 +286,7 @@ wormhole_process_command(wormhole_request_t *req)
 	const char *name;
 	wormhole_environment_t *env;
 	wormhole_profile_t *profile;
+	int nsfd;
 
 	name = req->message->payload.command.string;
 	trace("Processing request for command \"%s\" from uid %d", name, req->client_uid);
@@ -293,7 +298,24 @@ wormhole_process_command(wormhole_request_t *req)
 		return;
 	}
 
-	env = wormhole_environment_find(profile->name);
+	nsfd = wormhole_profile_namespace_fd(profile);
+	if (nsfd >= 0) {
+		__wormhole_respond(req,
+			wormhole_message_build_command_status(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
+			nsfd);
+		log_info("served request for a \"%s\" namespace", profile->name);
+		return;
+	}
+
+	if (!(env = profile->environment)) {
+		/* For profiles that do not reference an environment, the call to
+		 * wormhole_profile_namespace_fd() should have returned a valid file
+		 * descriptor, namely an fd for our host namespace.
+		 * If we get here nevertheless, something is very wrong. */
+		log_error("Profile %s: no environment associated", profile->name);
+		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
+		return;
+	}
 
 	/* If the setup command exited with an error status, return a failure indication
 	 * to the client. */
@@ -303,7 +325,7 @@ wormhole_process_command(wormhole_request_t *req)
 		return;
 	}
 
-	if (env->nsfd < 0) {
+	{
 		wormhole_socket_t *setup_sock;
 
 		if (env->setup_ctx.child_pid != 0) {
@@ -325,7 +347,7 @@ wormhole_process_command(wormhole_request_t *req)
 	}
 
 	__wormhole_respond(req,
-		wormhole_message_build_command_status(WORMHOLE_STATUS_OK, profile->command),
+		wormhole_message_build_command_status(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
 		env->nsfd);
 
 	log_info("served request for a \"%s\" namespace", profile->name);

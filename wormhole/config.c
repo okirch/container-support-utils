@@ -464,7 +464,15 @@ __wormhole_config_overlay_add_path(struct wormhole_overlay_config *overlay, cons
 	pi = &overlay->path[overlay->npaths++];
 	pi->type = type;
 
-	return __wormhole_config_process_string(kwd, &pi->path, ps);
+	if (!__wormhole_config_process_string(kwd, &pi->path, ps))
+		return false;
+
+	if (pi->path == NULL || pi->path[0] != '/') {
+		parser_error(ps, "%s: invalid path \"%s\" - must specify an absolute path name", kwd, pi->path);
+		return false;
+	}
+
+	return true;
 }
 
 /*

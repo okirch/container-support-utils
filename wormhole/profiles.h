@@ -21,6 +21,9 @@
 #ifndef _WORMHOLE_PROFILES_H
 #define _WORMHOLE_PROFILES_H
 
+/* fwd decl */
+struct wormhole_config;
+
 enum {
 	WORMHOLE_PATH_TYPE_HIDE,
 	WORMHOLE_PATH_TYPE_OVERLAY,
@@ -42,8 +45,10 @@ struct path_info {
 typedef struct wormhole_environment wormhole_environment_t;
 struct wormhole_environment {
 	wormhole_environment_t *next;
-
 	char *			name;
+
+	struct wormhole_environment_config *config;
+
 	int			nsfd;
 	bool			failed;
 
@@ -56,15 +61,23 @@ struct wormhole_environment {
 
 typedef struct wormhole_profile wormhole_profile_t;
 struct wormhole_profile {
+	wormhole_profile_t *	next;
 	char *			name;
-	char *			command;
-	char *			container_image;
-	char *			mount_point;
-	struct path_info	path_info[128];
+
+	wormhole_environment_t *environment;
+
+	struct wormhole_profile_config *config;
 };
 
+extern bool			wormhole_profiles_configure(struct wormhole_config *);
 extern wormhole_profile_t *	wormhole_profile_find(const char *argv0);
 extern int			wormhole_profile_setup(wormhole_profile_t *);
+
+extern const char *		wormhole_profile_command(const wormhole_profile_t *);
+extern wormhole_environment_t *	wormhole_profile_environment(wormhole_profile_t *);
+extern int			wormhole_profile_namespace_fd(const wormhole_profile_t *);
+/* Will go away again */
+extern const char *		wormhole_profile_container_image_name(const wormhole_profile_t *);
 
 extern wormhole_environment_t *	wormhole_environment_find(const char *name);
 extern struct wormhole_socket *	wormhole_environment_async_setup(wormhole_environment_t *, wormhole_profile_t *);
