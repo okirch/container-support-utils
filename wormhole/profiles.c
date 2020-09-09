@@ -629,15 +629,22 @@ int
 wormhole_profile_namespace_fd(const wormhole_profile_t *profile)
 {
 	wormhole_environment_t *env;
+	int fd = -1;
 
 	if ((env = profile->environment) == NULL) {
-		assert(0);
-		return -1; /* not correct */
+		trace("Profile %s: returning namespace fd for host namespace", profile->name);
+		fd = open("/proc/self/ns/mnt", O_RDONLY);
+		if (fd < 0)
+			log_error("Unable to open /proc/self/ns/mnt: %m");
+	} else
+	if (!env->failed && env->nsfd >= 0) {
+		trace("Profile %s: returning namespace fd for environment \"%s\"", profile->name, env->name);
+		fd = dup(env->nsfd);
+		if (fd < 0)
+			log_error("Unable to dup() namespace fd: %m");
 	}
 
-	if (env->failed)
-		return -1;
-	return env->nsfd;
+	return fd;
 }
 
 /*

@@ -458,7 +458,7 @@ wormhole_socket_enqueue(wormhole_socket_t *s, struct buf *bp, int fd)
 	s->sendbuf = bp;
 
 	if (fd >= 0)
-		s->sendfd = dup(fd);
+		s->sendfd = fd;
 }
 
 void

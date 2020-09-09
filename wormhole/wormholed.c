@@ -268,6 +268,8 @@ __wormhole_respond(wormhole_request_t *req, struct buf *bp, int fd)
 		/* Client disconnected while we were processing the
 		 * request. Pretend we sent the reply. */
 		buf_free(bp);
+		if (fd >= 0)
+			close(fd);
 	}
 
 	req->reply_sent = true;
