@@ -267,15 +267,13 @@ wormhole_environment_find_by_pid(pid_t pid)
 static const char *
 container_make_local_name(const char *image_name)
 {
-	static char local_buf[128];
+	static char local_buf[256];
 	char *s;
 
-	if (strlen(image_name) >= sizeof(local_buf)) {
+	if (snprintf(local_buf, sizeof(local_buf), "wormhole_%s", image_name) >= sizeof(local_buf)) {
 		log_error("Container image name \"%s\" is too long", image_name);
 		return NULL;
 	}
-
-	strcpy(local_buf, image_name);
 
 	if ((s = strchr(local_buf, ':')) != NULL)
 		*s = '\0';

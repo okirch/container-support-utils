@@ -15,7 +15,7 @@ environment python2 {
 	}
 }
 
-environment yast2 {
+environment yast2env {
 	overlay {
 		image		okir/yast-testing
 
@@ -37,7 +37,7 @@ environment yast2 {
 
 profile yast2 {
 	command			/sbin/yast2
-	environment		yast2
+	environment		yast2env
 }
 
 # The following profiles do not specify any path info and/or container
