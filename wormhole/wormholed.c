@@ -288,6 +288,7 @@ wormhole_process_command(wormhole_request_t *req)
 	const char *name;
 	wormhole_environment_t *env;
 	wormhole_profile_t *profile;
+	wormhole_socket_t *setup_sock;
 	int nsfd;
 
 	name = req->message->payload.command.string;
@@ -327,32 +328,23 @@ wormhole_process_command(wormhole_request_t *req)
 		return;
 	}
 
-	{
-		wormhole_socket_t *setup_sock;
-
-		if (env->setup_ctx.child_pid != 0) {
-			trace("setup for \"%s\" is in process, delaying", env->name);
-			return;
-		}
-
-		/* The profile setup starts a process in the background,
-		 * connected via a socketpair. When it completes, it passes
-		 * a namespace fd back to the daemon process.
-		 */
-		setup_sock = wormhole_environment_async_setup(env, profile);
-
-		/* set up a socket to recv the namespace FD from the child
-		 * process. */
-		wormhole_install_socket(setup_sock);
-		env->setup_ctx.sock_id = setup_sock->id;
+	if (env->setup_ctx.child_pid != 0) {
+		trace("setup for \"%s\" is in process, delaying", env->name);
 		return;
 	}
 
-	__wormhole_respond(req,
-		wormhole_message_build_command_status(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
-		env->nsfd);
-
-	log_info("served request for a \"%s\" namespace", profile->name);
+	/* The profile setup starts a process in the background,
+	 * connected via a socketpair. When it completes, it passes
+	 * a namespace fd back to the daemon process.
+	 */
+	setup_sock = wormhole_environment_async_setup(env, profile);
+	if (setup_sock == NULL) {
+		log_error("Profile %s: unable to create setup process", profile->name);
+		wormhole_respond(req, WORMHOLE_STATUS_ERROR);
+		env->failed = true;
+	} else {
+		wormhole_install_socket(setup_sock);
+	}
 }
 
 void

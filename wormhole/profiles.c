@@ -138,46 +138,6 @@ __wormhole_profiles_configure_profiles(struct wormhole_profile_config *list)
 	return true;
 }
 
-#if 0
-static wormhole_profile_t		dummy_profiles[] = {
-	{
-		.name =			"ps",
-		.command =		"/usr/bin/ps",
-	},
-	{
-		.name =			"yast2",
-		.command =		"/sbin/yast2",
-		.container_image =	"okir/yast-testing",
-
-		.path_info = {
-			PATH_INFO_REPLACE("/usr/lib/perl5"),
-			PATH_INFO_REPLACE("/usr/lib/YaST2"),
-			PATH_INFO_REPLACE_CHILDREN("/usr/lib64"),
-			// PATH_INFO_REPLACE("/usr/lib64/ruby"),
-			PATH_INFO_REPLACE("/usr/share/YaST2"),
-			PATH_INFO_REPLACE("/var/log/YaST2"),
-
-			/* mount the wormhole client binary on /usr/bin/zypper so that
-			 * zypper runs in the host context. */
-			PATH_INFO_WORMHOLE("/usr/bin/zypper"),
-			/* Same for rpm */
-			PATH_INFO_WORMHOLE("/usr/bin/rpm"),
-		},
-	},
-	{
-		.name =			"zypper",
-		.command =		"/usr/bin/zypper",
-		/* No container, not path info - execute this in the root context */
-	},
-	{
-		.name =			"rpm",
-		.command =		"/usr/bin/rpm",
-		/* No container, not path info - execute this in the root context */
-	},
-	{ NULL }
-};
-#endif
-
 wormhole_profile_t *
 wormhole_profile_new(const char *name)
 {
