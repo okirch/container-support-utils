@@ -41,13 +41,25 @@ recognizes the following command line options:
 .B \-\-foreground
 Do not background the process; keep running in the foreground.
 .TP
-.BI "\-\-runtime name
+.BI "\-\-runtime " name
 Some environments may be based on a container image, and thus need a container runtime
 in order to start them. Using the
 .B \-\-runtime
 option, a container runtime other than the default can be used.
 .IP
 At the moment, the only supported runtime is \fBpodman\fP.
+.TP
+.BI "\-\-name " name
+By default,
+.B wormholed
+will listen on local domain socket
+.BR /var/run/wormhole.sock .
+Using this option, you can change the server socket to some other name. The
+.I name
+argument should either refer to an absolute path name starting with
+.BR / ,
+or an abstract local socket name starting with
+.BR @ .
 .TP
 .BI \-\-debug
 Enable tracing of the daemon's operations.

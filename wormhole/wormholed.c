@@ -55,14 +55,16 @@ struct wormhole_request {
 struct option wormhole_options[] = {
 	{ "foreground",	no_argument,		NULL,	'F' },
 	{ "runtime",	required_argument,	NULL,	'R' },
+	{ "name",	required_argument,	NULL,	'N' },
 	{ "debug",	no_argument,		NULL,	'd' },
 	{ NULL }
 };
 
 static const char *		opt_runtime = "default";
+static const char *		opt_socket_name = WORMHOLE_SOCKET_PATH;
 static bool			opt_foreground = false;
 
-static int			wormhole_daemon(void);
+static int			wormhole_daemon(const char *socket_path);
 static void			wormhole_reap_children(void);
 
 static bool			wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd);
@@ -82,13 +84,16 @@ main(int argc, char **argv)
 	struct wormhole_config *config;
 	int c;
 
-	while ((c = getopt_long(argc, argv, "d", wormhole_options, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "dFR:N:", wormhole_options, NULL)) != EOF) {
 		switch (c) {
 		case 'F':
 			opt_foreground = true;
 			break;
 		case 'R':
 			opt_runtime = optarg;
+			break;
+		case 'N':
+			opt_socket_name = optarg;
 			break;
 		case 'd':
 			tracing_enable();
@@ -108,11 +113,11 @@ main(int argc, char **argv)
 	if (!wormhole_profiles_configure(config))
 		log_fatal("Bad configuration, cannot continue.");
 
-	return wormhole_daemon();
+	return wormhole_daemon(opt_socket_name);
 }
 
 int
-wormhole_daemon(void)
+wormhole_daemon(const char *socket_path)
 {
 	static struct wormhole_app_ops app_ops = {
 		.new_socket = wormhole_install_socket,
@@ -120,14 +125,14 @@ wormhole_daemon(void)
 	};
 	wormhole_socket_t *srv_sock;
 
-	srv_sock = wormhole_listen(WORMHOLE_SOCKET_PATH, &app_ops);
+	srv_sock = wormhole_listen(socket_path, &app_ops);
 	if (srv_sock == NULL) {
-		log_error("Cannot set up server socket %s", WORMHOLE_SOCKET_PATH);
+		log_error("Cannot set up server socket %s", socket_path);
 		return 1;
 	}
 	wormhole_install_socket(srv_sock);
 
-	log_info("wormhole daemon: listening on %s", WORMHOLE_SOCKET_PATH);
+	log_info("wormhole daemon: listening on %s", socket_path);
 
 	if (!opt_foreground) {
 		if (daemon(false, false) < 0) {
