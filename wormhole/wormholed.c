@@ -61,7 +61,7 @@ struct option wormhole_options[] = {
 	{ NULL }
 };
 
-static const char *		opt_server_path;
+static char *			opt_server_path;
 static const char *		opt_runtime = "default";
 static const char *		opt_socket_name = WORMHOLE_SOCKET_PATH;
 static bool			opt_foreground = false;
@@ -86,7 +86,7 @@ main(int argc, char **argv)
 	struct wormhole_config *config;
 	int c;
 
-	opt_server_path = argv[0];
+	opt_server_path = realpath(argv[0], NULL);
 
 	while ((c = getopt_long(argc, argv, "dFR:N:", wormhole_options, NULL)) != EOF) {
 		switch (c) {
