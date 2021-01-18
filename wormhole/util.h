@@ -41,4 +41,6 @@ extern void			fsutil_tempdir_init(struct fsutil_tempdir *td);
 extern char *			fsutil_tempdir_path(struct fsutil_tempdir *td);
 extern int			fsutil_tempdir_cleanup(struct fsutil_tempdir *td);
 
+extern int			fsutil_makedirs(const char *path, int mode);
+
 #endif // _WORMHOLE_UTIL_H

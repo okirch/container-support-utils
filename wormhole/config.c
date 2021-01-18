@@ -487,6 +487,10 @@ __wormhole_config_overlay_directive(void *block_obj, const char *kwd, struct par
 		return __wormhole_config_process_string(kwd, &overlay->directory, ps);
 	if (!strcmp(kwd, "image"))
 		return __wormhole_config_process_string(kwd, &overlay->image, ps);
+	if (!strcmp(kwd, "bind"))
+		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_BIND, ps);
+	if (!strcmp(kwd, "bind-children"))
+		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_BIND_CHILDREN, ps);
 	if (!strcmp(kwd, "overlay"))
 		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_OVERLAY, ps);
 	if (!strcmp(kwd, "overlay-children"))
@@ -689,12 +693,17 @@ dump_config(struct wormhole_config *cfg)
 	}
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+	const char *config_file = "wormhole.conf.sample";
 	struct wormhole_config *cfg;
 
 	tracing_enable();
-	if (!(cfg = wormhole_config_load("wormhole.conf.sample")))
+	printf("%s\n", argv[1]);
+	if (argc > 1)
+		config_file = argv[1];
+
+	if (!(cfg = wormhole_config_load(config_file)))
 		log_fatal("Unable to load config");
 
 	dump_config(cfg);

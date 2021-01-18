@@ -56,13 +56,15 @@ struct wormhole_message_status {
 };
 
 struct wormhole_message_namespace_request {
-	char			profile[WORMHOLE_PROTOCOL_STRING_MAX];
+	char *			profile;
 };
 
 struct wormhole_message_namespace_response {
 	uint32_t		status;
 
-	char			command[WORMHOLE_PROTOCOL_STRING_MAX];
+	char *			command;
+	char *			server_socket;
+	char **			environment_vars;
 };
 
 struct wormhole_message_parsed {
@@ -74,10 +76,11 @@ struct wormhole_message_parsed {
 	} payload;
 };
 
-extern struct buf *	wormhole_message_build(int opcode, const void *payload, size_t payload_len);
 extern struct buf *	wormhole_message_build_status(unsigned int status);
 extern struct buf *	wormhole_message_build_namespace_request(const char *name);
-extern struct buf *	wormhole_message_build_namespace_response(unsigned int status, const char *cmd);
+extern struct buf *	wormhole_message_build_namespace_response(unsigned int status,
+					const char *cmd, const char **env,
+					const char *socket_name);
 
 extern bool		wormhole_message_complete(struct buf *bp);
 extern struct wormhole_message_parsed *wormhole_message_parse(struct buf *bp, uid_t sender_uid);

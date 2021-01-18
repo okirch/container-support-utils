@@ -9,9 +9,9 @@ environment python2 {
 	overlay {
 		directory	/opt/python2
 
-		overlay		/usr/bin/python
-		overlay-children /usr/lib/python*
-		overlay-children /usr/lib64/python*
+		overlay		/usr
+#		bind		/usr/lib/python*
+#		bind		/usr/lib64/python*
 	}
 }
 
@@ -19,12 +19,12 @@ environment yast2env {
 	overlay {
 		image		okir/yast-testing
 
-		overlay		/usr/lib/perl5
-		overlay		/usr/lib/YaST2
-		overlay-children /usr/lib64
-		# overlay	/usr/lib64/ruby
-		overlay		/usr/share/YaST2
-		overlay		/var/log/YaST2
+		bind		/usr/lib/perl5
+		bind		/usr/lib/YaST2
+		bind-children /usr/lib64
+		# bind	/usr/lib64/ruby
+		bind		/usr/share/YaST2
+		bind		/var/log/YaST2
 
 		# mount the wormhole client binary on /usr/bin/zypper so that
 		# zypper runs in the host context.
@@ -38,6 +38,12 @@ environment yast2env {
 profile yast2 {
 	command			/sbin/yast2
 	environment		yast2env
+}
+
+# This is a bare bones python 2.x installation
+profile python2 {
+	command			/usr/bin/python
+	environment		python2
 }
 
 # The following profiles do not specify any path info and/or container

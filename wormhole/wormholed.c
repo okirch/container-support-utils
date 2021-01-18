@@ -61,7 +61,7 @@ struct option wormhole_options[] = {
 	{ NULL }
 };
 
-static const char *		opt_server_path;
+static char *			opt_server_path;
 static const char *		opt_runtime = "default";
 static const char *		opt_socket_name = WORMHOLE_SOCKET_PATH;
 static bool			opt_foreground = false;
@@ -86,7 +86,7 @@ main(int argc, char **argv)
 	struct wormhole_config *config;
 	int c;
 
-	opt_server_path = argv[0];
+	opt_server_path = realpath(argv[0], NULL);
 
 	while ((c = getopt_long(argc, argv, "dFR:N:", wormhole_options, NULL)) != EOF) {
 		switch (c) {
@@ -312,11 +312,20 @@ wormhole_process_namespace_request(wormhole_request_t *req)
 		return;
 	}
 
+	env = profile->environment;
+
 	nsfd = wormhole_profile_namespace_fd(profile);
 	if (nsfd >= 0) {
-		__wormhole_respond(req,
-			wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
-			nsfd);
+		struct buf *msg;
+
+		if (env == NULL) {
+			msg = wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile), NULL, NULL);
+		} else {
+			msg = wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile),
+					NULL, env->sub_daemon.socket_name);
+		}
+
+		__wormhole_respond(req, msg, nsfd);
 		log_info("served request for a \"%s\" namespace", profile->name);
 		return;
 	}

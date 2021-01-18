@@ -70,6 +70,7 @@ extern wormhole_socket_t *	wormhole_connect(const char *path, struct wormhole_ap
 
 extern wormhole_socket_t *	wormhole_accept_connection(int fd);
 extern wormhole_socket_t *	wormhole_socket_find(unsigned int id);
+extern void			wormhole_socket_fail(wormhole_socket_t *);
 extern void			wormhole_socket_free(wormhole_socket_t *conn);
 extern wormhole_socket_t *	wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid);
 
