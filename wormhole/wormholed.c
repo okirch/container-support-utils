@@ -292,8 +292,8 @@ wormhole_respond(wormhole_request_t *req, int status)
 	__wormhole_respond(req, wormhole_message_build_status(status), -1);
 }
 
-void
-wormhole_process_command(wormhole_request_t *req)
+static void
+wormhole_process_namespace_request(wormhole_request_t *req)
 {
 	const char *name;
 	wormhole_environment_t *env;
@@ -301,8 +301,8 @@ wormhole_process_command(wormhole_request_t *req)
 	wormhole_socket_t *setup_sock;
 	int nsfd;
 
-	name = req->message->payload.command.string;
-	trace("Processing request for command \"%s\" from uid %d", name, req->client_uid);
+	name = req->message->payload.namespace_request.profile;
+	trace("Processing request for profile \"%s\" from uid %d", name, req->client_uid);
 
 	profile = wormhole_profile_find(name);
 	if (profile == NULL) {
@@ -314,7 +314,7 @@ wormhole_process_command(wormhole_request_t *req)
 	nsfd = wormhole_profile_namespace_fd(profile);
 	if (nsfd >= 0) {
 		__wormhole_respond(req,
-			wormhole_message_build_command_status(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
+			wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
 			nsfd);
 		log_info("served request for a \"%s\" namespace", profile->name);
 		return;
@@ -361,8 +361,8 @@ void
 wormhole_process_request(wormhole_request_t *req)
 {
 	switch (req->opcode) {
-	case WORMHOLE_OPCODE_COMMAND_REQUEST:
-		wormhole_process_command(req);
+	case WORMHOLE_OPCODE_NAMESPACE_REQUEST:
+		wormhole_process_namespace_request(req);
 		break;
 
 	default:
@@ -387,7 +387,15 @@ wormhole_process_pending_requests(void)
 			continue;
 		}
 
+		/* This is not a good idea. The protocol currently isn't able
+		 * to deal with out of order responses for lack of a
+		 * transaction ID. What's worse, we run into DoS problems
+		 * if we let users do this. */
+#ifdef bad_idea
 		pos = &req->next;
+#else
+		break;
+#endif
 	}
 }
 

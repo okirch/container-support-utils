@@ -47,9 +47,8 @@ wormhole_message_build(int opcode, const void *payload, size_t payload_len)
 struct buf *
 wormhole_message_build_status(unsigned int status)
 {
-	struct wormhole_message_status payload;
+	uint32_t payload = htonl(status);
 
-	payload.status = htonl(status);
 	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &payload, sizeof(payload));
 }
 
@@ -65,31 +64,31 @@ __wormhole_message_put_string(char buffer[WORMHOLE_PROTOCOL_STRING_MAX], const c
 	return true;
 }
 
-static struct buf *
-__wormhole_message_build_command(int opcode, int status, const char *name)
+struct buf *
+wormhole_message_build_namespace_request(const char *name)
 {
-	struct wormhole_message_command payload;
+	struct wormhole_message_namespace_request payload;
 
 	memset(&payload, 0, sizeof(payload));
-	if (opcode == WORMHOLE_OPCODE_COMMAND_STATUS)
-		payload.status = htonl(status);
-
-	if (!__wormhole_message_put_string(payload.string, name))
+	if (!__wormhole_message_put_string(payload.profile, name))
 		return NULL;
 
-	return wormhole_message_build(opcode, &payload, sizeof(payload));
+	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_REQUEST, &payload, sizeof(payload));
 }
 
 struct buf *
-wormhole_message_build_command_request(const char *name)
+wormhole_message_build_namespace_response(unsigned int status, const char *cmd)
 {
-	return __wormhole_message_build_command(WORMHOLE_OPCODE_COMMAND_REQUEST, 0, name);
-}
+	struct wormhole_message_namespace_response payload;
 
-struct buf *
-wormhole_message_build_command_status(unsigned int status, const char *cmd)
-{
-	return __wormhole_message_build_command(WORMHOLE_OPCODE_COMMAND_STATUS, status, cmd);
+	memset(&payload, 0, sizeof(payload));
+	payload.status = htonl(status);
+
+	if (status == WORMHOLE_STATUS_OK
+	 && !__wormhole_message_put_string(payload.command, cmd))
+		return NULL;
+
+	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, &payload, sizeof(payload));
 }
 
 static inline bool
@@ -163,11 +162,16 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		pmsg->payload.status.status = ntohl(pmsg->payload.status.status);
 		break;
 
-	case WORMHOLE_OPCODE_COMMAND_REQUEST:
-	case WORMHOLE_OPCODE_COMMAND_STATUS:
-		pmsg->payload.command.status = ntohl(pmsg->payload.command.status);
+	case WORMHOLE_OPCODE_NAMESPACE_REQUEST:
+		if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
+			log_error("message from uid %d: unterminated profile argument", sender_uid);
+			goto failed;
+		}
+		break;
+	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
+		pmsg->payload.namespace_response.status = ntohl(pmsg->payload.namespace_response.status);
 
-		if (pmsg->payload.command.string[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
+		if (pmsg->payload.namespace_response.command[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
 			log_error("message from uid %d: unterminated string argument", sender_uid);
 			goto failed;
 		}

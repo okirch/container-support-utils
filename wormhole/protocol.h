@@ -42,8 +42,8 @@ struct wormhole_message {
 enum {
 	WORMHOLE_OPCODE_STATUS = 0,
 
-	WORMHOLE_OPCODE_COMMAND_REQUEST = 1,
-	WORMHOLE_OPCODE_COMMAND_STATUS = 2,
+	WORMHOLE_OPCODE_NAMESPACE_REQUEST = 1,
+	WORMHOLE_OPCODE_NAMESPACE_RESPONSE = 2,
 };
 
 enum {
@@ -55,30 +55,29 @@ struct wormhole_message_status {
 	uint32_t		status;
 };
 
-struct wormhole_message_command {
-	/* request: mbz
-	 * status: status code
-	 */
+struct wormhole_message_namespace_request {
+	char			profile[WORMHOLE_PROTOCOL_STRING_MAX];
+};
+
+struct wormhole_message_namespace_response {
 	uint32_t		status;
 
-	/* request: profile name
-	 * status: command to execute
-	 */
-	char			string[WORMHOLE_PROTOCOL_STRING_MAX];
+	char			command[WORMHOLE_PROTOCOL_STRING_MAX];
 };
 
 struct wormhole_message_parsed {
 	struct wormhole_message	hdr;
 	union {
 		struct wormhole_message_status status;
-		struct wormhole_message_command command;
+		struct wormhole_message_namespace_request namespace_request;
+		struct wormhole_message_namespace_response namespace_response;
 	} payload;
 };
 
 extern struct buf *	wormhole_message_build(int opcode, const void *payload, size_t payload_len);
 extern struct buf *	wormhole_message_build_status(unsigned int status);
-extern struct buf *	wormhole_message_build_command_request(const char *name);
-extern struct buf *	wormhole_message_build_command_status(unsigned int status, const char *cmd);
+extern struct buf *	wormhole_message_build_namespace_request(const char *name);
+extern struct buf *	wormhole_message_build_namespace_response(unsigned int status, const char *cmd);
 
 extern bool		wormhole_message_complete(struct buf *bp);
 extern struct wormhole_message_parsed *wormhole_message_parse(struct buf *bp, uid_t sender_uid);

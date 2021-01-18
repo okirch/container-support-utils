@@ -75,7 +75,7 @@ wormhole_send_command(int fd, const char *cmd)
 	struct buf *bp;
 	int rv = 0;
 
-	bp = wormhole_message_build_command_request(cmd);
+	bp = wormhole_message_build_namespace_request(cmd);
 	rv = send(fd, buf_head(bp), buf_available(bp), 0);
 	if (rv < 0)
 		log_error("send: %m");
@@ -138,19 +138,19 @@ wormhole_recv_command_status(int sock_fd, char *cmdbuf, size_t cmdsize, int *res
 	switch (pmsg->hdr.opcode) {
 	case WORMHOLE_OPCODE_STATUS:
 		if (pmsg->payload.status.status != WORMHOLE_STATUS_OK) {
-			log_error("Server returns error status %d!", pmsg->payload.command.status);
+			log_error("Server returns error status %d!", pmsg->payload.status.status);
 			goto failed;
 		}
 		cmdbuf[0] = '\0';
 		break;
 
-	case WORMHOLE_OPCODE_COMMAND_STATUS:
-		if (pmsg->payload.command.status != WORMHOLE_STATUS_OK) {
-			log_error("Server returns error status %d!", pmsg->payload.command.status);
+	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
+		if (pmsg->payload.namespace_response.status != WORMHOLE_STATUS_OK) {
+			log_error("Server returns error status %d!", pmsg->payload.namespace_response.status);
 			goto failed;
 		}
 
-		strncpy(cmdbuf, pmsg->payload.command.string, cmdsize - 1);
+		strncpy(cmdbuf, pmsg->payload.namespace_response.command, cmdsize - 1);
 		break;
 
 	default:
