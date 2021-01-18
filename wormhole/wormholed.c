@@ -215,6 +215,7 @@ wormhole_message_consume(wormhole_socket_t *s, struct buf *bp, int fd)
 	if (!(pmsg = wormhole_message_parse(bp, s->uid))) {
 		log_error("Bad message from uid %d", s->uid);
 		/* Mark socket for closing */
+		wormhole_socket_fail(s);
 		return false;
 	}
 
