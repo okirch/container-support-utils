@@ -37,6 +37,7 @@
 #include "buffer.h"
 
 struct option wormhole_options[] = {
+	{ "debug",	no_argument,		NULL,	'd' },
 	{ NULL }
 };
 
@@ -58,8 +59,12 @@ main(int argc, char **argv)
 	if (strcmp(basename, "wormhole") != 0)
 		return wormhole_client(argc, argv);
 
-	while ((c = getopt_long(argc, argv, "", wormhole_options, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "d", wormhole_options, NULL)) != EOF) {
 		switch (c) {
+		case 'd':
+			tracing_enable();
+			break;
+
 		default:
 			log_error("Usage message goes here.");
 			return 2;
