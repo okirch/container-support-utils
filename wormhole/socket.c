@@ -27,6 +27,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stddef.h>		/* for offsetof() */
 #include <errno.h>
 
 #include "tracing.h"
@@ -148,33 +149,80 @@ static struct wormhole_socket_ops __wormhole_passive_socket_ops = {
 	.process	= __wormhole_passive_socket_process,
 };
 
+static socklen_t
+wormhole_make_socket_address(struct sockaddr_un *sun, const char *socket_name)
+{
+	socklen_t len;
+
+	memset(sun, 0, sizeof(*sun));
+	sun->sun_family = AF_LOCAL;
+
+	if (socket_name[0] == '/') {
+		/* This is an absolute pathname */
+		if (strlen(socket_name) + 1 > sizeof(sun->sun_path)) {
+			log_error("socket name \"%s\" too long", socket_name);
+			return 0;
+		}
+
+		strcpy(sun->sun_path, socket_name);
+
+		len = offsetof(struct sockaddr_un, sun_path) + strlen(sun->sun_path) + 1;
+	} else if (socket_name[0] == '@') {
+		unsigned int namelen = strlen(socket_name);
+
+		/* This is an abstract socket name */
+		if (namelen > sizeof(sun->sun_path)) {
+			log_error("socket name \"%s\" too long", socket_name);
+			return 0;
+		}
+
+		memcpy(sun->sun_path, socket_name, namelen);
+		sun->sun_path[0] = '\0';
+
+		len = offsetof(struct sockaddr_un, sun_path) + namelen;
+	} else {
+		log_error("Bad socket name \"%s\"", socket_name);
+		return 0;
+	}
+
+	return len;
+}
+
 wormhole_socket_t *
-wormhole_listen(const char *path, struct wormhole_app_ops *app_ops)
+wormhole_listen(const char *socket_name, struct wormhole_app_ops *app_ops)
 {
 	wormhole_socket_t *s;
 	struct sockaddr_un sun;
+	socklen_t sun_len;
 	int fd;
 
-	if (unlink(path) < 0 && errno != ENOENT) {
-		log_error("unlink(%s) failed: %m", path);
+	/* If we're binding to a path, and the path exists already, assume
+	 * it's an old one left over from a previous incarnation. Nuke it.
+	 */
+	if (socket_name[0] == '/'
+	 && unlink(socket_name) < 0 && errno != ENOENT) {
+		log_error("unlink(%s) failed: %m", socket_name);
 		return NULL;
 	}
+
+	sun_len = wormhole_make_socket_address(&sun, socket_name);
+	if (sun_len == 0)
+		return NULL;
 
 	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
 		log_error("unable to create PF_LOCAL stream socket: %m");
 		return NULL;
 	}
 
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, path);
-	if (bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		log_error("cannot bind to %s: %m", path);
+	if (bind(fd, (struct sockaddr *) &sun, sun_len) < 0) {
+		log_error("cannot bind to %s: %m", socket_name);
 		close(fd);
 		return NULL;
 	}
 
-	chmod(path, 0666);
+	/* If we're binding to a path, make sure everyone can connect to it. */
+	if (socket_name[0] == '/')
+		chmod(socket_name, 0666);
 
 	if (listen(fd, 10) < 0) {
 		log_error("cannot listen on socket: %m");
@@ -428,22 +476,24 @@ wormhole_connected_socket_new(int fd, uid_t uid, gid_t gid)
 }
 
 wormhole_socket_t *
-wormhole_connect(const char *path, struct wormhole_app_ops *app_ops)
+wormhole_connect(const char *socket_name, struct wormhole_app_ops *app_ops)
 {
 	wormhole_socket_t *s;
 	struct sockaddr_un sun;
+	socklen_t sun_len;
 	int fd;
+
+	sun_len = wormhole_make_socket_address(&sun, socket_name);
+	if (sun_len == 0)
+		return NULL;
 
 	if ((fd = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
 		log_error("unable to create PF_LOCAL stream socket: %m");
 		return NULL;
 	}
 
-	memset(&sun, 0, sizeof(sun));
-	sun.sun_family = AF_LOCAL;
-	strcpy(sun.sun_path, path);
-	if (connect(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		log_error("cannot connect to %s: %m", path);
+	if (connect(fd, (struct sockaddr *) &sun, sun_len) < 0) {
+		log_error("cannot connect to %s: %m", socket_name);
 		close(fd);
 		return NULL;
 	}
