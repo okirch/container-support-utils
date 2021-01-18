@@ -312,11 +312,20 @@ wormhole_process_namespace_request(wormhole_request_t *req)
 		return;
 	}
 
+	env = profile->environment;
+
 	nsfd = wormhole_profile_namespace_fd(profile);
 	if (nsfd >= 0) {
-		__wormhole_respond(req,
-			wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile)),
-			nsfd);
+		struct buf *msg;
+
+		if (env == NULL) {
+			msg = wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile), NULL, NULL);
+		} else {
+			msg = wormhole_message_build_namespace_response(WORMHOLE_STATUS_OK, wormhole_profile_command(profile),
+					NULL, env->sub_daemon.socket_name);
+		}
+
+		__wormhole_respond(req, msg, nsfd);
 		log_info("served request for a \"%s\" namespace", profile->name);
 		return;
 	}

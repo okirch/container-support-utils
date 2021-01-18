@@ -31,6 +31,7 @@
 
 #define WORMHOLE_PROTO_TYPE_INT32	'i'
 #define WORMHOLE_PROTO_TYPE_STRING	's'
+#define WORMHOLE_PROTO_TYPE_ARRAY	'A'
 
 struct buf *
 wormhole_message_build(int opcode, const struct buf *payload)
@@ -60,7 +61,7 @@ wormhole_message_build(int opcode, const struct buf *payload)
 }
 
 static inline bool
-__wormhole_message_put(struct buf *bp, char type, const void *datum, size_t len)
+__wormhole_message_put_type_and_size(struct buf *bp, char type, size_t len)
 {
 	unsigned char size;
 
@@ -69,8 +70,14 @@ __wormhole_message_put(struct buf *bp, char type, const void *datum, size_t len)
 	size = len;
 
 	return buf_put(bp, &type, 1)
-	    && buf_put(bp, &size, 1)
-	    && buf_put(bp, datum, size);
+	    && buf_put(bp, &size, 1);
+}
+
+static inline bool
+__wormhole_message_put(struct buf *bp, char type, const void *datum, size_t len)
+{
+	return __wormhole_message_put_type_and_size(bp, type, len)
+	    && buf_put(bp, datum, len);
 }
 
 static inline bool
@@ -99,7 +106,8 @@ __wormhole_message_get_type_and_size(struct buf *bp, size_t *size_p)
 		return '\0';
 
 	if (type != WORMHOLE_PROTO_TYPE_INT32
-	 && type != WORMHOLE_PROTO_TYPE_STRING)
+	 && type != WORMHOLE_PROTO_TYPE_STRING
+	 && type != WORMHOLE_PROTO_TYPE_ARRAY)
 		return '\0';
 
 	*size_p = size;
@@ -127,6 +135,8 @@ wormhole_message_get_int32(struct buf *bp, uint32_t *value)
 static inline bool
 wormhole_message_put_string(struct buf *bp, const char *s)
 {
+	if (s == NULL)
+		s = "";
 	return __wormhole_message_put(bp, WORMHOLE_PROTO_TYPE_STRING, s, strlen(s) + 1);
 }
 
@@ -148,6 +158,62 @@ wormhole_message_get_string(struct buf *bp)
 		return ret;
 
 	free(ret);
+	return NULL;
+}
+
+static bool
+wormhole_message_put_string_array(struct buf *bp, const char **array)
+{
+	unsigned int i, count;
+
+	if (array == NULL)
+		return __wormhole_message_put_type_and_size(bp, WORMHOLE_PROTO_TYPE_ARRAY, 0);
+
+	for (count = 0; array[count]; ++count)
+		;
+
+	if (!__wormhole_message_put_type_and_size(bp, WORMHOLE_PROTO_TYPE_ARRAY, count))
+		return false;
+
+	for (i = 0; i < count; ++i) {
+		if (!wormhole_message_put_string(bp, array[i]))
+			return false;
+	}
+
+	return true;
+}
+
+static inline void
+wormhole_message_free_string_array(char **array)
+{
+	unsigned int i;
+
+	for (i = 0; array[i]; ++i)
+		free(array[i]);
+	free(array);
+}
+
+static char **
+wormhole_message_get_string_array(struct buf *bp)
+{
+	size_t count;
+	unsigned int i;
+	char **ret;
+
+	if (__wormhole_message_get_type_and_size(bp, &count) != WORMHOLE_PROTO_TYPE_ARRAY)
+		return NULL;
+
+	ret = calloc(count + 1, sizeof(ret[0]));
+	for (i = 0; i < count; ++i) {
+		ret[i] = wormhole_message_get_string(bp);
+		if (ret[i] == NULL)
+			goto failed;
+	}
+
+	return ret;
+
+failed:
+	wormhole_message_free_string_array(ret);
 	return NULL;
 }
 
@@ -201,15 +267,29 @@ wormhole_message_destroy_namespace_request(struct wormhole_message_namespace_req
 }
 
 struct buf *
-wormhole_message_build_namespace_response(unsigned int status, const char *cmd)
+wormhole_message_build_namespace_response(unsigned int status, const char *cmd, const char **env,
+		const char *socket_name)
 {
 	struct buf *payload = buf_alloc();
 	struct buf *msg = NULL;
 
-	if (wormhole_message_put_int32(payload, status)
-	 && (status != WORMHOLE_STATUS_OK || wormhole_message_put_string(payload, cmd)))
-		msg = wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, payload);
+	if (!wormhole_message_put_int32(payload, status))
+		goto done;
 
+	if (status == WORMHOLE_STATUS_OK) {
+		if (!wormhole_message_put_string(payload, cmd))
+			goto done;
+
+		if (!wormhole_message_put_string(payload, socket_name))
+			goto done;
+
+		if (!wormhole_message_put_string_array(payload, env))
+			goto done;
+	}
+
+	msg = wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, payload);
+
+done:
 	buf_free(payload);
 	return msg;
 }
@@ -224,6 +304,14 @@ wormhole_message_parse_namespace_response(struct buf *payload, struct wormhole_m
 		msg->command = wormhole_message_get_string(payload);
 		if (msg->command == NULL)
 			return false;
+
+		msg->server_socket = wormhole_message_get_string(payload);
+		if (msg->server_socket == NULL)
+			return false;
+
+		msg->environment_vars = wormhole_message_get_string_array(payload);
+		if (msg->environment_vars == NULL)
+			return false;
 	}
 
 	return true;
@@ -234,6 +322,11 @@ wormhole_message_destroy_namespace_response(struct wormhole_message_namespace_re
 {
 	if (msg->command != NULL)
 		free(msg->command);
+	if (msg->server_socket != NULL)
+		free(msg->server_socket);
+
+	if (msg->environment_vars != NULL)
+		wormhole_message_free_string_array(msg->environment_vars);
 }
 
 static inline bool
@@ -340,14 +433,14 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		printf("Dump of message payload (%u bytes)\n", count);
 		for (base = 0; base < count; base += 16) {
 			printf("%04x:", base);
-			for (i = 0; i < count && i < 16; ++i) {
+			for (i = 0; base + i < count && i < 16; ++i) {
 				printf(" %02x", data[base + i]);
 			}
 			while (i++ < 16)
 				printf("   ");
 
 			printf("     ");
-			for (i = 0; i < count && i < 16; ++i) {
+			for (i = 0; base + i < count && i < 16; ++i) {
 				char cc = data[base + i];
 
 				if (isprint(cc))
@@ -356,9 +449,6 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 					printf(".");
 			}
 			printf("\n");
-
-			data += i;
-			count -= i;
 		}
 	}
 #endif

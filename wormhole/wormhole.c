@@ -75,7 +75,7 @@ main(int argc, char **argv)
 }
 
 static int
-wormhole_send_command(int fd, const char *cmd)
+wormhole_send_namespace_request(int fd, const char *cmd)
 {
 	struct buf *bp;
 	int rv = 0;
@@ -126,7 +126,7 @@ failed:
 }
 
 static bool
-wormhole_recv_command_status(int sock_fd, char *cmdbuf, size_t cmdsize, int *resp_fd)
+wormhole_recv_namespace_response(int sock_fd, char *cmdbuf, size_t cmdsize, int *resp_fd)
 {
 	struct wormhole_message_parsed *pmsg = NULL;
 	struct buf *bp;
@@ -156,6 +156,24 @@ wormhole_recv_command_status(int sock_fd, char *cmdbuf, size_t cmdsize, int *res
 		}
 
 		strncpy(cmdbuf, pmsg->payload.namespace_response.command, cmdsize - 1);
+
+		/* Apply any environment variables sent to us by the server.
+		 * If I was a halfway decent programmer, I'd pass this list back to
+		 * the caller and let her do with these whatever she wants, but being
+		 * the lazy bum that I am, I'm cutting one or two corners here. --okir
+		 */
+		if (pmsg->payload.namespace_response.environment_vars != NULL) {
+			char **env = pmsg->payload.namespace_response.environment_vars;
+			unsigned int i;
+
+			for (i = 0; env[i]; ++i)
+				putenv(env[i]);
+		}
+
+		if (pmsg->payload.namespace_response.server_socket) {
+			setenv("WORMHOLE_SOCKET", pmsg->payload.namespace_response.server_socket, 1);
+		}
+
 		break;
 
 	default:
@@ -188,10 +206,10 @@ wormhole_client(int argc, char **argv)
 
 	fd = s->fd;
 
-	if (wormhole_send_command(fd, argv[0]) < 0)
+	if (wormhole_send_namespace_request(fd, argv[0]) < 0)
 		return 1;
 
-	if (!wormhole_recv_command_status(fd, pathbuf, sizeof(pathbuf), &nsfd))
+	if (!wormhole_recv_namespace_response(fd, pathbuf, sizeof(pathbuf), &nsfd))
 		return 1;
 
 	if (nsfd < 0) {
