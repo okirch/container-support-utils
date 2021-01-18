@@ -21,10 +21,12 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <errno.h>
 
 #include "tracing.h"
@@ -237,3 +239,46 @@ fsutil_tempdir_cleanup(struct fsutil_tempdir *td)
 	return 0;
 }
 
+static int
+__fsutil_makedirs(char *path, int mode)
+{
+	char *slash;
+	int ret;
+
+	trace("%s(%s)", __func__, path);
+	if (mkdir(path, mode) == 0)
+		return 0;
+
+	slash = strrchr(path, '/');
+	while (slash > path && slash[-1] == '/')
+		--slash;
+	slash[0] = '\0';
+
+	ret = __fsutil_makedirs(path, mode);
+
+	slash[0] = '/';
+	if (ret >= 0)
+		ret = mkdir(path, mode);
+
+	return ret;
+}
+
+int
+fsutil_makedirs(const char *path, int mode)
+{
+	char path_copy[PATH_MAX];
+
+	if (mkdir(path, mode) == 0)
+		return 0;
+
+	if (errno != ENOENT)
+		return -1;
+
+	if (strlen(path) + 1 > sizeof(path_copy)) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	strcpy(path_copy, path);
+	return __fsutil_makedirs(path_copy, mode);
+}
