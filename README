@@ -31,3 +31,10 @@ So far, this project contains the following
 	above. Not very secure yet, and not really recommended
 	for use.
 
+ wormhole
+	This is a rather different type of beast in that it's
+	not about containers per se. Instead, this is a tool
+	that uses the kernel's container capabilities to create
+	a way of packaging applications with some or all of their
+	dependencies, and still make the system appear as seamless
+	as possible to the application.
