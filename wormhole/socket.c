@@ -554,6 +554,14 @@ wormhole_drop_sendfd(wormhole_socket_t *s)
 }
 
 void
+wormhole_socket_fail(wormhole_socket_t *s)
+{
+	log_error("Failure on socket %d, will close", s->id);
+	s->recv_closed = true;
+	s->send_closed = true;
+}
+
+void
 wormhole_socket_free(wormhole_socket_t *s)
 {
 	wormhole_uninstall_socket(s);
