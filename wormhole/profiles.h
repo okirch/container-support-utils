@@ -57,6 +57,12 @@ struct wormhole_environment {
 		pid_t		child_pid;
 		unsigned int	sock_id;
 	} setup_ctx;
+
+	/* Information on the sub-daemon for this context. */
+	struct {
+		char *		socket_name;
+		pid_t		pid;
+	} sub_daemon;
 };
 
 typedef struct wormhole_profile wormhole_profile_t;

@@ -36,6 +36,7 @@
 #include "socket.h"
 #include "protocol.h"
 #include "buffer.h"
+#include "server.h"
 #include "util.h"
 
 typedef struct wormhole_request wormhole_request_t;
@@ -60,6 +61,7 @@ struct option wormhole_options[] = {
 	{ NULL }
 };
 
+static const char *		opt_server_path;
 static const char *		opt_runtime = "default";
 static const char *		opt_socket_name = WORMHOLE_SOCKET_PATH;
 static bool			opt_foreground = false;
@@ -83,6 +85,8 @@ main(int argc, char **argv)
 {
 	struct wormhole_config *config;
 	int c;
+
+	opt_server_path = argv[0];
 
 	while ((c = getopt_long(argc, argv, "dFR:N:", wormhole_options, NULL)) != EOF) {
 		switch (c) {
@@ -385,4 +389,56 @@ wormhole_process_pending_requests(void)
 
 		pos = &req->next;
 	}
+}
+
+/* We should encapsulate the setns stuff somewhere */
+#include <sched.h>
+
+bool
+wormhole_start_sub_daemon(wormhole_environment_t *env)
+{
+	const char *argv[16];
+	int argc;
+	char namebuf[128];
+	pid_t pid;
+
+	snprintf(namebuf, sizeof(namebuf), "@wormhole/%s", env->name);
+	env->sub_daemon.socket_name = strdup(namebuf);
+
+	trace("Starting daemon process %s", namebuf);
+
+	pid = fork();
+	if (pid < 0) {
+		log_error("Failed to start daemon process %s: fork: %m", namebuf);
+		return false;
+	}
+
+	if (pid > 0) {
+		env->sub_daemon.pid = pid;
+		return true;
+	}
+
+	/* Change to the namespace */
+	if (setns(env->nsfd, CLONE_NEWNS) < 0) {
+                log_error("setns: %m");
+                exit(2);
+        }
+
+	/* FIXME: we should probably create a separate cgroup for
+	 * each wormhole environment. This would help with a clean
+	 * shutdown. */
+
+	argc = 0;
+	argv[argc++] = opt_server_path;
+	argv[argc++] = "--name";
+	argv[argc++] = namebuf;
+	argv[argc++] = "--foreground";
+	argv[argc++] = "--runtime";
+	argv[argc++] = opt_runtime;
+	argv[argc] = NULL;
+
+	execv(opt_server_path, (char **) argv);
+	log_error("Failed to start %s: %m", opt_server_path);
+
+	exit(22);
 }

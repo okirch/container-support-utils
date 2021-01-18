@@ -37,6 +37,7 @@
 #include "profiles.h"
 #include "config.h"
 #include "runtime.h"
+#include "server.h"
 #include "socket.h"
 #include "util.h"
 
@@ -691,6 +692,9 @@ wormhole_environment_async_complete(pid_t pid, int status)
 	if (!wormhole_child_status_okay(status)) {
 		log_error("Environment \"%s\": setup process failed (%s)", env->name,
 				wormhole_child_status_describe(status));
+		env->failed = true;
+	} else if (!wormhole_start_sub_daemon(env)) {
+		trace("Environment \"%s\": failed to start subspace daemon", env->name);
 		env->failed = true;
 	} else {
 		trace("Environment \"%s\": setup process complete", env->name);
