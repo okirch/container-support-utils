@@ -302,6 +302,10 @@ pathinfo_type_string(int type)
 	switch (type) {
 	case WORMHOLE_PATH_TYPE_HIDE:
 		return "HIDE";
+	case WORMHOLE_PATH_TYPE_BIND:
+		return "BIND";
+	case WORMHOLE_PATH_TYPE_BIND_CHILDREN:
+		return "BIND_CHILDREN";
 	case WORMHOLE_PATH_TYPE_OVERLAY:
 		return "OVERLAY";
 	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
@@ -326,10 +330,49 @@ _pathinfo_bind_one(wormhole_environment_t *environment, const char *source, cons
 }
 
 static bool
-pathinfo_bind_path(wormhole_environment_t *environment, const struct path_info *pi, const char *dest, const char *source)
+_pathinfo_overlay_one(wormhole_environment_t *environment,
+		const char *source, const char *target,
+		const char *workdir)
+{
+	char options[3 * PATH_MAX];
+
+	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
+			target, source, workdir);
+
+	if (mount("foo", target, "overlay", 0, options) < 0) {
+		log_error("Cannot mount overlayfs at %s: %m", target);
+		return false;
+	}
+
+	trace2("mounted overlay of %s and %s to %s", target, source, target);
+	return true;
+}
+
+static bool
+pathinfo_bind_path(wormhole_environment_t *environment, const struct path_info *pi,
+			const char *overlay_root,
+			const char *dest, const char *source)
 {
 	trace2("%s(%s, %s)", __func__, dest, source);
 	return _pathinfo_bind_one(environment, source, dest);
+}
+
+static bool
+pathinfo_overlay_path(wormhole_environment_t *environment, const struct path_info *pi,
+			const char *overlay_root,
+			const char *dest, const char *source)
+{
+	char workdir[PATH_MAX];
+
+	trace2("%s(%s, %s)", __func__, dest, source);
+
+	snprintf(workdir, sizeof(workdir), "%s/work%s", overlay_root, dest);
+	if (fsutil_makedirs(workdir, 0755) < 0) {
+		log_error("Failed to create overlay workdir for %s at %s", dest, workdir);
+		return false;
+	}
+
+	return _pathinfo_overlay_one(environment, source, dest, workdir);
 }
 
 static int
@@ -368,6 +411,7 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 
 static bool
 pathinfo_bind_children(wormhole_environment_t *environment, const struct path_info *pi,
+		const char *overlay_root,
 		const char *dest, const char *source)
 {
 	struct fsutil_tempdir td;
@@ -445,7 +489,7 @@ pathinfo_bind_wormhole(wormhole_environment_t *environment, const struct path_in
 
 static bool
 pathinfo_process_glob(wormhole_environment_t *env, const struct path_info *pi, const char *overlay_root,
-			bool (*func)(wormhole_environment_t *env, const struct path_info *pi, const char *dest, const char *source))
+			bool (*func)(wormhole_environment_t *env, const struct path_info *pi, const char *overlay_root, const char *dest, const char *source))
 {
 	bool retval = false;
 	unsigned int overlay_path_len;
@@ -481,7 +525,7 @@ pathinfo_process_glob(wormhole_environment_t *env, const struct path_info *pi, c
 		}
 		dest = source + overlay_path_len;
 
-		if (!func(env, pi, dest, source))
+		if (!func(env, pi, overlay_root, dest, source))
 			goto done;
 	}
 
@@ -507,11 +551,19 @@ pathinfo_process(wormhole_environment_t *env, const struct path_info *pi, const 
 	}
 
 	switch (pi->type) {
-	case WORMHOLE_PATH_TYPE_OVERLAY:
+	case WORMHOLE_PATH_TYPE_BIND:
 		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_bind_path);
 
-	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
+	case WORMHOLE_PATH_TYPE_BIND_CHILDREN:
 		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_bind_children);
+
+	case WORMHOLE_PATH_TYPE_OVERLAY:
+		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_overlay_path);
+
+#if 0
+	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
+		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_overlay_children);
+#endif
 
 	case WORMHOLE_PATH_TYPE_WORMHOLE:
 		return pathinfo_bind_wormhole(env, pi);

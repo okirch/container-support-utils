@@ -487,6 +487,10 @@ __wormhole_config_overlay_directive(void *block_obj, const char *kwd, struct par
 		return __wormhole_config_process_string(kwd, &overlay->directory, ps);
 	if (!strcmp(kwd, "image"))
 		return __wormhole_config_process_string(kwd, &overlay->image, ps);
+	if (!strcmp(kwd, "bind"))
+		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_BIND, ps);
+	if (!strcmp(kwd, "bind-children"))
+		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_BIND_CHILDREN, ps);
 	if (!strcmp(kwd, "overlay"))
 		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_OVERLAY, ps);
 	if (!strcmp(kwd, "overlay-children"))

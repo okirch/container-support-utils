@@ -268,7 +268,7 @@ fsutil_makedirs(const char *path, int mode)
 {
 	char path_copy[PATH_MAX];
 
-	if (mkdir(path, mode) == 0)
+	if (mkdir(path, mode) == 0 || errno == EEXIST)
 		return 0;
 
 	if (errno != ENOENT)
