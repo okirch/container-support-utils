@@ -120,6 +120,12 @@ __wormhole_passive_socket_poll(wormhole_socket_t *s, struct pollfd *pfd)
 	return true;
 }
 
+/*
+ * This function should return true even in the face of transient errors.
+ * Our call site will close the socket when we return false, and we don't
+ * want our listening socket to be closed due to conditions like too many
+ * open FDs etc.
+ */
 static bool
 __wormhole_passive_socket_process(wormhole_socket_t *s, struct pollfd *pfd)
 {

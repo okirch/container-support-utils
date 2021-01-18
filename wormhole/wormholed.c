@@ -154,6 +154,7 @@ wormhole_daemon(void)
 			assert(nfd < WORMHOLE_SOCKET_MAX);
 
 			if (!s->ops->poll(s, poll_array + nfd)) {
+				/* remove socket from linked list and free it. */
 				wormhole_socket_free(s);
 				continue;
 			}
@@ -174,7 +175,7 @@ wormhole_daemon(void)
 		for (i = 0; i < nfd; ++i) {
 			s = sock_array[i];
 			if (!s->ops->process(s, poll_array + i)) {
-				/* should drop the socket */
+				wormhole_socket_free(s);
 			}
 		}
 	}
