@@ -52,6 +52,21 @@ wormhole_message_build_status(unsigned int status)
 	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &payload, sizeof(payload));
 }
 
+bool
+wormhole_message_parse_status(struct buf *bp, struct wormhole_message_parsed *pmsg)
+{
+	uint32_t payload;
+
+	if (pmsg->hdr.payload_len != sizeof(payload))
+		return false;
+
+	if (!buf_get(bp, &payload, sizeof(payload)))
+		return false;
+
+	pmsg->payload.status.status = ntohl(payload);
+	return true;
+}
+
 static bool
 __wormhole_message_put_string(char buffer[WORMHOLE_PROTOCOL_STRING_MAX], const char *s)
 {
@@ -76,6 +91,22 @@ wormhole_message_build_namespace_request(const char *name)
 	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_REQUEST, &payload, sizeof(payload));
 }
 
+static bool
+wormhole_message_parse_namespace_request(struct buf *bp, struct wormhole_message_parsed *pmsg)
+{
+	unsigned int len = pmsg->hdr.payload_len;
+
+	if (buf_get(bp, &pmsg->payload, len) != len)
+		return false;
+
+	if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
+		log_error("unterminated profile argument");
+		return false;
+	}
+
+	return true;
+}
+
 struct buf *
 wormhole_message_build_namespace_response(unsigned int status, const char *cmd)
 {
@@ -89,6 +120,24 @@ wormhole_message_build_namespace_response(unsigned int status, const char *cmd)
 		return NULL;
 
 	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, &payload, sizeof(payload));
+}
+
+static bool
+wormhole_message_parse_namespace_response(struct buf *bp, struct wormhole_message_parsed *pmsg)
+{
+	unsigned int len = pmsg->hdr.payload_len;
+
+	if (buf_get(bp, &pmsg->payload, len) != len)
+		return false;
+
+	pmsg->payload.namespace_response.status = ntohl(pmsg->payload.namespace_response.status);
+
+	if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
+		log_error("unterminated profile argument");
+		return false;
+	}
+
+	return true;
 }
 
 static inline bool
@@ -144,37 +193,25 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
                 goto failed;
         }
 
-	if (pmsg->hdr.payload_len > sizeof(pmsg->payload)) {
-                log_error("message from uid %d: payload of %u bytes too big",
+	if (pmsg->hdr.payload_len > BUF_SZ) {
+		log_error("message from uid %d: payload of %u bytes too big",
 				sender_uid, pmsg->hdr.payload_len);
 		goto failed;
 	}
 
-	{
-		unsigned int len = pmsg->hdr.payload_len;
-
-		assert(buf_get(bp, &pmsg->payload, len) == len);
-		__buf_advance_head(bp, len);
-	}
-
 	switch (pmsg->hdr.opcode) {
 	case WORMHOLE_OPCODE_STATUS:
-		pmsg->payload.status.status = ntohl(pmsg->payload.status.status);
+		if (!wormhole_message_parse_status(bp, pmsg))
+			goto failed;
 		break;
 
 	case WORMHOLE_OPCODE_NAMESPACE_REQUEST:
-		if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
-			log_error("message from uid %d: unterminated profile argument", sender_uid);
+		if (!wormhole_message_parse_namespace_request(bp, pmsg))
 			goto failed;
-		}
 		break;
 	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
-		pmsg->payload.namespace_response.status = ntohl(pmsg->payload.namespace_response.status);
-
-		if (pmsg->payload.namespace_response.command[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
-			log_error("message from uid %d: unterminated string argument", sender_uid);
+		if (!wormhole_message_parse_namespace_response(bp, pmsg))
 			goto failed;
-		}
 		break;
 
 	default:
@@ -182,10 +219,14 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		goto failed;
 	}
 
+	/* Consume the message payload */
+	__buf_advance_head(bp, pmsg->hdr.payload_len);
+
 	return pmsg;
 
 failed:
 	/* FIXME: mark socket for closing */
+	log_error("bad message from uid %d", sender_uid);
 	wormhole_message_free_parsed(pmsg);
 	return NULL;
 }
