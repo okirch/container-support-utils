@@ -21,17 +21,26 @@
 
 #include <netinet/in.h>
 #include <string.h>
+#include <stdio.h>
+#include <ctype.h>
 
 #include "protocol.h"
 #include "tracing.h"
 
+#define PROTOCOL_TRACING
+
+#define WORMHOLE_PROTO_TYPE_INT32	'i'
+#define WORMHOLE_PROTO_TYPE_STRING	's'
+
 struct buf *
-wormhole_message_build(int opcode, const void *payload, size_t payload_len)
+wormhole_message_build(int opcode, const struct buf *payload)
 {
+	unsigned int payload_len = buf_available(payload);
 	struct wormhole_message msg;
 	struct buf *bp = buf_alloc();
 
-	assert(payload_len < 0x10000);
+	if (payload_len >= 0x10000)
+		return NULL;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.version = htons(WORMHOLE_PROTOCOL_VERSION);
@@ -39,105 +48,192 @@ wormhole_message_build(int opcode, const void *payload, size_t payload_len)
 	msg.payload_len = htons(payload_len);
 
 	buf_put(bp, &msg, sizeof(msg));
-	if (payload_len)
-		buf_put(bp, payload, payload_len);
+
+	/* Now copy the payload into the message */
+	if (payload_len) {
+		const void *data = buf_head(payload);
+
+		if (!buf_put(bp, data, payload_len))
+			return NULL;
+	}
 	return bp;
+}
+
+static inline bool
+__wormhole_message_put(struct buf *bp, char type, const void *datum, size_t len)
+{
+	unsigned char size;
+
+	if (len >= 256)
+		return false;
+	size = len;
+
+	return buf_put(bp, &type, 1)
+	    && buf_put(bp, &size, 1)
+	    && buf_put(bp, datum, size);
+}
+
+static inline bool
+wormhole_message_put_int32(struct buf *bp, uint32_t value)
+{
+	value = htonl(value);
+
+	return __wormhole_message_put(bp, WORMHOLE_PROTO_TYPE_INT32, &value, sizeof(value));
+}
+
+static inline bool
+__wormhole_buffer_get(struct buf *bp, void *ptr, size_t len)
+{
+	if (!buf_get(bp, ptr, len))
+		return false;
+	__buf_advance_head(bp, len);
+	return true;
+}
+
+static inline char
+__wormhole_message_get_type_and_size(struct buf *bp, size_t *size_p)
+{
+	unsigned char type, size;
+
+	if (!__wormhole_buffer_get(bp, &type, 1) || !__wormhole_buffer_get(bp, &size, 1))
+		return '\0';
+
+	if (type != WORMHOLE_PROTO_TYPE_INT32
+	 && type != WORMHOLE_PROTO_TYPE_STRING)
+		return '\0';
+
+	*size_p = size;
+	return type;
+}
+
+static inline bool
+wormhole_message_get_int32(struct buf *bp, uint32_t *value)
+{
+	size_t size;
+
+	if (__wormhole_message_get_type_and_size(bp, &size) != WORMHOLE_PROTO_TYPE_INT32)
+		return false;
+
+	if (size != sizeof(*value))
+		return false;
+
+	if (!__wormhole_buffer_get(bp, value, size))
+		return false;
+
+	*value = ntohl(*value);
+	return true;
+}
+
+static inline bool
+wormhole_message_put_string(struct buf *bp, const char *s)
+{
+	return __wormhole_message_put(bp, WORMHOLE_PROTO_TYPE_STRING, s, strlen(s) + 1);
+}
+
+static inline char *
+wormhole_message_get_string(struct buf *bp)
+{
+	size_t size;
+	char *ret;
+
+	if (__wormhole_message_get_type_and_size(bp, &size) != WORMHOLE_PROTO_TYPE_STRING)
+		return false;
+
+	if (size == 0)
+		return false;
+
+	/* Extract the NUL terminated string from the buffer */
+	ret = malloc(size);
+	if (__wormhole_buffer_get(bp, ret, size) && ret[size - 1] == '\0')
+		return ret;
+
+	free(ret);
+	return NULL;
 }
 
 struct buf *
 wormhole_message_build_status(unsigned int status)
 {
-	uint32_t payload = htonl(status);
+	struct buf *payload = buf_alloc();
+	struct buf *msg = NULL;
 
-	return wormhole_message_build(WORMHOLE_OPCODE_STATUS, &payload, sizeof(payload));
-}
+	if (wormhole_message_put_int32(payload, status))
+		msg =  wormhole_message_build(WORMHOLE_OPCODE_STATUS, payload);
 
-bool
-wormhole_message_parse_status(struct buf *bp, struct wormhole_message_parsed *pmsg)
-{
-	uint32_t payload;
-
-	if (pmsg->hdr.payload_len != sizeof(payload))
-		return false;
-
-	if (!buf_get(bp, &payload, sizeof(payload)))
-		return false;
-
-	pmsg->payload.status.status = ntohl(payload);
-	return true;
+	buf_free(payload);
+	return msg;
 }
 
 static bool
-__wormhole_message_put_string(char buffer[WORMHOLE_PROTOCOL_STRING_MAX], const char *s)
+wormhole_message_parse_status(struct buf *payload, struct wormhole_message_parsed *pmsg)
 {
-	if (s == NULL)
-		return true;
-
-	if (strlen(s) >= WORMHOLE_PROTOCOL_STRING_MAX)
-		return false;
-	strcpy(buffer, s);
-	return true;
+	return wormhole_message_get_int32(payload, &pmsg->payload.status.status);
 }
 
 struct buf *
 wormhole_message_build_namespace_request(const char *name)
 {
-	struct wormhole_message_namespace_request payload;
+	struct buf *payload = buf_alloc();
+	struct buf *msg = NULL;
 
-	memset(&payload, 0, sizeof(payload));
-	if (!__wormhole_message_put_string(payload.profile, name))
-		return NULL;
+	if (wormhole_message_put_string(payload, name))
+		msg = wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_REQUEST, payload);
 
-	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_REQUEST, &payload, sizeof(payload));
+	buf_free(payload);
+	return msg;
 }
 
 static bool
-wormhole_message_parse_namespace_request(struct buf *bp, struct wormhole_message_parsed *pmsg)
+wormhole_message_parse_namespace_request(struct buf *payload, struct wormhole_message_namespace_request *msg)
 {
-	unsigned int len = pmsg->hdr.payload_len;
-
-	if (buf_get(bp, &pmsg->payload, len) != len)
+	msg->profile = wormhole_message_get_string(payload);
+	if (msg->profile == NULL)
 		return false;
-
-	if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
-		log_error("unterminated profile argument");
-		return false;
-	}
 
 	return true;
+}
+
+static void
+wormhole_message_destroy_namespace_request(struct wormhole_message_namespace_request *msg)
+{
+	if (msg->profile != NULL)
+		free(msg->profile);
 }
 
 struct buf *
 wormhole_message_build_namespace_response(unsigned int status, const char *cmd)
 {
-	struct wormhole_message_namespace_response payload;
+	struct buf *payload = buf_alloc();
+	struct buf *msg = NULL;
 
-	memset(&payload, 0, sizeof(payload));
-	payload.status = htonl(status);
+	if (wormhole_message_put_int32(payload, status)
+	 && (status != WORMHOLE_STATUS_OK || wormhole_message_put_string(payload, cmd)))
+		msg = wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, payload);
 
-	if (status == WORMHOLE_STATUS_OK
-	 && !__wormhole_message_put_string(payload.command, cmd))
-		return NULL;
-
-	return wormhole_message_build(WORMHOLE_OPCODE_NAMESPACE_RESPONSE, &payload, sizeof(payload));
+	buf_free(payload);
+	return msg;
 }
 
 static bool
-wormhole_message_parse_namespace_response(struct buf *bp, struct wormhole_message_parsed *pmsg)
+wormhole_message_parse_namespace_response(struct buf *payload, struct wormhole_message_namespace_response *msg)
 {
-	unsigned int len = pmsg->hdr.payload_len;
-
-	if (buf_get(bp, &pmsg->payload, len) != len)
+	if (!wormhole_message_get_int32(payload, &msg->status))
 		return false;
 
-	pmsg->payload.namespace_response.status = ntohl(pmsg->payload.namespace_response.status);
-
-	if (pmsg->payload.namespace_request.profile[WORMHOLE_PROTOCOL_STRING_MAX-1] != '\0') {
-		log_error("unterminated profile argument");
-		return false;
+	if (msg->status == WORMHOLE_STATUS_OK) {
+		msg->command = wormhole_message_get_string(payload);
+		if (msg->command == NULL)
+			return false;
 	}
 
 	return true;
+}
+
+static void
+wormhole_message_destroy_namespace_response(struct wormhole_message_namespace_response *msg)
+{
+	if (msg->command != NULL)
+		free(msg->command);
 }
 
 static inline bool
@@ -167,6 +263,32 @@ __wormhole_message_dissect_header(struct buf *bp, struct wormhole_message *msg, 
 	return true;
 }
 
+static struct buf *
+wormhole_message_get_payload(struct buf *bp, struct wormhole_message_parsed *pmsg)
+{
+	unsigned int payload_len = pmsg->hdr.payload_len;
+	struct buf *payload;
+
+	if (buf_available(bp) < payload_len) {
+		trace("%s: hdr.payload_len = %u exceeds available data from buffer (%u bytes)",
+				payload_len, buf_available(bp));
+		return NULL;
+	}
+
+	/* Copy the message payload to a separate buffer. */
+	payload = buf_alloc();
+	if (!buf_put(payload, buf_head(bp), payload_len)) {
+		buf_free(payload);
+		return NULL;
+	}
+
+	/* Consume the message payload */
+	__buf_advance_head(bp, payload_len);
+
+	return payload;
+}
+
+
 bool
 wormhole_message_complete(struct buf *bp)
 {
@@ -179,6 +301,7 @@ struct wormhole_message_parsed *
 wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 {
 	struct wormhole_message_parsed *pmsg;
+	struct buf *payload = NULL;
 
 	pmsg = calloc(1, sizeof(*pmsg));
 
@@ -186,6 +309,13 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		/* should not happen. */
 		log_fatal("%s: unable to parse message header", __func__);
 	}
+
+#ifdef PROTOCOL_TRACING
+	trace("Received message header: protocol version %u opcode %u payload_len %u",
+			pmsg->hdr.version,
+			pmsg->hdr.opcode,
+			pmsg->hdr.payload_len);
+#endif
 
 	if (!__wormhole_message_protocol_compatible(&pmsg->hdr)) {
                 log_error("message from uid %d: incompatible protocol message (version 0x%x)",
@@ -199,18 +329,53 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		goto failed;
 	}
 
+	if (!(payload = wormhole_message_get_payload(bp, pmsg)))
+		goto failed;
+
+#ifdef PROTOCOL_TRACING
+	{
+		unsigned int i, base, count = buf_available(payload);
+		const unsigned char *data = buf_head(payload);
+
+		printf("Dump of message payload (%u bytes)\n", count);
+		for (base = 0; base < count; base += 16) {
+			printf("%04x:", base);
+			for (i = 0; i < count && i < 16; ++i) {
+				printf(" %02x", data[base + i]);
+			}
+			while (i++ < 16)
+				printf("   ");
+
+			printf("     ");
+			for (i = 0; i < count && i < 16; ++i) {
+				char cc = data[base + i];
+
+				if (isprint(cc))
+					printf("%c", cc);
+				else
+					printf(".");
+			}
+			printf("\n");
+
+			data += i;
+			count -= i;
+		}
+	}
+#endif
+
 	switch (pmsg->hdr.opcode) {
 	case WORMHOLE_OPCODE_STATUS:
-		if (!wormhole_message_parse_status(bp, pmsg))
+		if (!wormhole_message_parse_status(payload, pmsg))
 			goto failed;
 		break;
 
 	case WORMHOLE_OPCODE_NAMESPACE_REQUEST:
-		if (!wormhole_message_parse_namespace_request(bp, pmsg))
+		if (!wormhole_message_parse_namespace_request(payload, &pmsg->payload.namespace_request))
 			goto failed;
 		break;
+
 	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
-		if (!wormhole_message_parse_namespace_response(bp, pmsg))
+		if (!wormhole_message_parse_namespace_response(payload, &pmsg->payload.namespace_response))
 			goto failed;
 		break;
 
@@ -219,20 +384,30 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		goto failed;
 	}
 
-	/* Consume the message payload */
-	__buf_advance_head(bp, pmsg->hdr.payload_len);
+	if (payload)
+		buf_free(payload);
 
 	return pmsg;
 
 failed:
-	/* FIXME: mark socket for closing */
-	log_error("bad message from uid %d", sender_uid);
 	wormhole_message_free_parsed(pmsg);
+	if (payload)
+		buf_free(payload);
 	return NULL;
 }
 
 void
 wormhole_message_free_parsed(struct wormhole_message_parsed *pmsg)
 {
+	switch (pmsg->hdr.opcode) {
+	case WORMHOLE_OPCODE_NAMESPACE_REQUEST:
+		wormhole_message_destroy_namespace_request(&pmsg->payload.namespace_request);
+		break;
+
+	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
+		wormhole_message_destroy_namespace_response(&pmsg->payload.namespace_response);
+		break;
+	}
+
 	free(pmsg);
 }
