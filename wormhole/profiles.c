@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <glob.h>
 
 #include "wormhole.h"
 #include "tracing.h"
@@ -44,7 +45,7 @@
 static wormhole_profile_t *	wormhole_profiles;
 static wormhole_environment_t *	wormhole_environments;
 static const char *		wormhole_client_path;
-static bool			__trace_verbose = false;
+static bool			__trace_verbose = true;
 
 static bool			__wormhole_profiles_configure_environments(struct wormhole_environment_config *list);
 static bool			__wormhole_profiles_configure_profiles(struct wormhole_profile_config *list);
@@ -325,9 +326,10 @@ _pathinfo_bind_one(wormhole_environment_t *environment, const char *source, cons
 }
 
 static bool
-pathinfo_bind_directory(wormhole_environment_t *environment, const struct path_info *pi, const char *source)
+pathinfo_bind_path(wormhole_environment_t *environment, const struct path_info *pi, const char *dest, const char *source)
 {
-	return _pathinfo_bind_one(environment, source, pi->path);
+	trace2("%s(%s, %s)", __func__, dest, source);
+	return _pathinfo_bind_one(environment, source, dest);
 }
 
 static int
@@ -365,7 +367,8 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 }
 
 static bool
-pathinfo_bind_children(wormhole_environment_t *environment, const struct path_info *pi, const char *source)
+pathinfo_bind_children(wormhole_environment_t *environment, const struct path_info *pi,
+		const char *dest, const char *source)
 {
 	struct fsutil_tempdir td;
 	const char *tempdir;
@@ -373,6 +376,8 @@ pathinfo_bind_children(wormhole_environment_t *environment, const struct path_in
 	DIR *dirfd;
 	unsigned int num_mounted = 0;
 	bool ok = false;
+
+	trace2("%s(%s, %s)", __func__, dest, source);
 
 	dirfd = opendir(source);
 	if (dirfd == NULL) {
@@ -383,8 +388,8 @@ pathinfo_bind_children(wormhole_environment_t *environment, const struct path_in
 	fsutil_tempdir_init(&td);
 
 	tempdir = fsutil_tempdir_path(&td);
-	if (pathinfo_create_overlay(tempdir, pi->path) < 0) {
-		log_error("unable to create overlay at \"%s\"", pi->path);
+	if (pathinfo_create_overlay(tempdir, dest) < 0) {
+		log_error("unable to create overlay at \"%s\"", dest);
 		goto out;
 	}
 
@@ -396,9 +401,9 @@ pathinfo_bind_children(wormhole_environment_t *environment, const struct path_in
 		if (d->d_name[0] == '.' && (d->d_name[1] == '\0' || d->d_name[1] == '.'))
 			continue;
 
-		/* printf("Trying to mount %s from %s to %s\n", d->d_name, source, pi->path); */
+		/* printf("Trying to mount %s from %s to %s\n", d->d_name, source, dest); */
 		snprintf(source_entry, sizeof(source_entry), "%s/%s", source, d->d_name);
-		snprintf(target_entry, sizeof(target_entry), "%s/%s", pi->path, d->d_name);
+		snprintf(target_entry, sizeof(target_entry), "%s/%s", dest, d->d_name);
 
 		/* FIXME: avoid mounting if source and target are exactly the same file;
 		 * this happens a lot when you mount a /lib directory. */
@@ -434,14 +439,62 @@ out:
 static bool
 pathinfo_bind_wormhole(wormhole_environment_t *environment, const struct path_info *pi)
 {
+	trace2("%s(%s)", __func__, pi->path);
 	return _pathinfo_bind_one(environment, wormhole_client_path, pi->path);
+}
+
+static bool
+pathinfo_process_glob(wormhole_environment_t *env, const struct path_info *pi, const char *overlay_root,
+			bool (*func)(wormhole_environment_t *env, const struct path_info *pi, const char *dest, const char *source))
+{
+	bool retval = false;
+	unsigned int overlay_path_len;
+	char pattern[PATH_MAX];
+	glob_t globbed;
+	size_t n;
+	int r;
+
+	trace("pathinfo_process_glob(overlay_root=%s, path=%s)", overlay_root, pi->path);
+
+	/* We check for this in the config file parsing code, so an assert is good enough here. */
+	assert(pi->path[0] == '/');
+	snprintf(pattern, sizeof(pattern), "%s%s", overlay_root, pi->path);
+
+	r = glob(pattern, GLOB_NOSORT | GLOB_NOMAGIC | GLOB_TILDE, NULL, &globbed);
+	if (r != 0) {
+		/* I'm globsmacked. Why did it fail? */
+		log_error("pathinfo expansion failed, glob(%s) returns %d", pattern, r);
+		goto done;
+	}
+
+	overlay_path_len = strlen(overlay_root);
+
+	for (n = 0; n < globbed.gl_pathc; ++n) {
+		const char *source, *dest;
+
+		source = globbed.gl_pathv[n];
+		if (strncmp(source, overlay_root, overlay_path_len) != 0
+		 || source[overlay_path_len] != '/') {
+			log_error("%s: strange - glob expansion of %s returned path name %s", __func__,
+					pattern, source);
+			goto done;
+		}
+		dest = source + overlay_path_len;
+
+		if (!func(env, pi, dest, source))
+			goto done;
+	}
+
+	retval = true;
+
+done:
+	globfree(&globbed);
+	return retval;
 }
 
 static bool
 pathinfo_process(wormhole_environment_t *env, const struct path_info *pi, const char *overlay_root)
 {
-	char source[PATH_MAX];
-
 	if (pi->type == WORMHOLE_PATH_TYPE_HIDE) {
 		/* hiding is not yet implemented */
 		log_error("Environment %s: do not know how to hide %s - no yet implemented", env->name, pi->path);
@@ -453,21 +506,14 @@ pathinfo_process(wormhole_environment_t *env, const struct path_info *pi, const 
 		return false;
 	}
 
-	/* We check for this in the config file parsing code, so an assert is good enough here. */
-	assert(pi->path[0] == '/');
-	snprintf(source, sizeof(source), "%s%s", overlay_root, pi->path);
-
 	switch (pi->type) {
 	case WORMHOLE_PATH_TYPE_OVERLAY:
-		trace2("pathinfo_bind_directory(%s, %s)", pi->path, source);
-		return pathinfo_bind_directory(env, pi, source);
+		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_bind_path);
 
 	case WORMHOLE_PATH_TYPE_OVERLAY_CHILDREN:
-		trace2("pathinfo_bind_children(%s, %s)", pi->path, source);
-		return pathinfo_bind_children(env, pi, source);
+		return pathinfo_process_glob(env, pi, overlay_root, pathinfo_bind_children);
 
 	case WORMHOLE_PATH_TYPE_WORMHOLE:
-		trace2("pathinfo_bind_wormhole(%s)", pi->path);
 		return pathinfo_bind_wormhole(env, pi);
 
 	default:
