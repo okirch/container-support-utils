@@ -481,7 +481,7 @@ wormhole_connect(const char *socket_name, struct wormhole_app_ops *app_ops)
 	wormhole_socket_t *s;
 	struct sockaddr_un sun;
 	socklen_t sun_len;
-	int fd;
+	int fd, r;
 
 	sun_len = wormhole_make_socket_address(&sun, socket_name);
 	if (sun_len == 0)
@@ -492,7 +492,18 @@ wormhole_connect(const char *socket_name, struct wormhole_app_ops *app_ops)
 		return NULL;
 	}
 
-	if (connect(fd, (struct sockaddr *) &sun, sun_len) < 0) {
+	if (getuid() != geteuid()) {
+		uid_t saved_uid = geteuid();
+
+		seteuid(getuid());
+		r = connect(fd, (struct sockaddr *) &sun, sun_len);
+		seteuid(saved_uid);
+		assert(geteuid() == saved_uid);
+	} else {
+		r = connect(fd, (struct sockaddr *) &sun, sun_len);
+	}
+
+	if (r < 0) {
 		log_error("cannot connect to %s: %m", socket_name);
 		close(fd);
 		return NULL;
