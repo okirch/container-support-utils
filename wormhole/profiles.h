@@ -21,6 +21,8 @@
 #ifndef _WORMHOLE_PROFILES_H
 #define _WORMHOLE_PROFILES_H
 
+#include "environment.h"
+
 /* fwd decl */
 struct wormhole_config;
 
@@ -42,29 +44,6 @@ struct path_info {
 #define PATH_INFO_REPLACE_CHILDREN(n)	{ .path = n, .replace = "$ROOT" n "/*" }
 #define PATH_INFO_WORMHOLE(n)	{ .path = n, .replace = "/usr/bin/wormhole" }
 
-typedef struct wormhole_environment wormhole_environment_t;
-struct wormhole_environment {
-	wormhole_environment_t *next;
-	char *			name;
-
-	struct wormhole_environment_config *config;
-
-	int			nsfd;
-	bool			failed;
-
-	/* While setup is in process */
-	struct {
-		pid_t		child_pid;
-		unsigned int	sock_id;
-	} setup_ctx;
-
-	/* Information on the sub-daemon for this context. */
-	struct {
-		char *		socket_name;
-		pid_t		pid;
-	} sub_daemon;
-};
-
 typedef struct wormhole_profile wormhole_profile_t;
 struct wormhole_profile {
 	wormhole_profile_t *	next;
@@ -84,9 +63,5 @@ extern wormhole_environment_t *	wormhole_profile_environment(wormhole_profile_t 
 extern int			wormhole_profile_namespace_fd(const wormhole_profile_t *);
 /* Will go away again */
 extern const char *		wormhole_profile_container_image_name(const wormhole_profile_t *);
-
-extern wormhole_environment_t *	wormhole_environment_find(const char *name);
-extern struct wormhole_socket *	wormhole_environment_async_setup(wormhole_environment_t *, wormhole_profile_t *);
-extern bool			wormhole_environment_async_complete(pid_t pid, int status);
 
 #endif // _WORMHOLE_PROFILES_H
