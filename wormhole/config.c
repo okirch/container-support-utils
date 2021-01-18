@@ -689,12 +689,17 @@ dump_config(struct wormhole_config *cfg)
 	}
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+	const char *config_file = "wormhole.conf.sample";
 	struct wormhole_config *cfg;
 
 	tracing_enable();
-	if (!(cfg = wormhole_config_load("wormhole.conf.sample")))
+	printf("%s\n", argv[1]);
+	if (argc > 1)
+		config_file = argv[1];
+
+	if (!(cfg = wormhole_config_load(config_file)))
 		log_fatal("Unable to load config");
 
 	dump_config(cfg);
