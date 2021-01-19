@@ -177,7 +177,6 @@ wormhole_overlay_config_free(struct wormhole_overlay_config *overlay)
 
 	for (i = 0, pi = overlay->path; i < overlay->npaths; ++i, ++pi) {
 		set_string(&pi->path, NULL);
-		set_string(&pi->replace, NULL);
 	}
 }
 

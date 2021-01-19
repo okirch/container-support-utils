@@ -38,13 +38,7 @@ enum {
 struct path_info {
 	int			type;
 	char *			path;
-	char *			replace;
 };
-
-#define PATH_INFO_HIDE(n)	{ .path = n, .replace = NULL }
-#define PATH_INFO_REPLACE(n)	{ .path = n, .replace = "$ROOT" n }
-#define PATH_INFO_REPLACE_CHILDREN(n)	{ .path = n, .replace = "$ROOT" n "/*" }
-#define PATH_INFO_WORMHOLE(n)	{ .path = n, .replace = "/usr/bin/wormhole" }
 
 typedef struct wormhole_profile wormhole_profile_t;
 struct wormhole_profile {
