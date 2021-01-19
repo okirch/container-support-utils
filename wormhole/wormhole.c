@@ -104,6 +104,13 @@ wormhole_namespace_response_callback(struct wormhole_message_namespace_response 
 		return false;
 	}
 
+	/* Unshare the namespace so that any nonsense that happens in the subprocess we spawns
+	 * stays local to that execution context. */
+	if (unshare(CLONE_NEWNS) < 0) {
+		log_error("unshare: %m");
+		return false;
+	}
+
 	/* We no longer need this fd and should not pass it on to the executed command */
 	close(nsfd);
 
