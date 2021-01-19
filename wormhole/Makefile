@@ -8,6 +8,7 @@ COPT		= -g
 CFLAGS		= -Wall -D_GNU_SOURCE -I../console $(COPT)
 WORMHOLE	= wormhole
 WORMHOLE_SRCS	= wormhole.c \
+		  client.c \
 		  socket.c \
 		  protocol.c \
 		  util.c

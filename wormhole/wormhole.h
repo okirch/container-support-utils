@@ -25,7 +25,14 @@
 #define WORMHOLE_CONFIG_PATH	"/etc/wormhole.conf"
 #define WORMHOLE_CLIENT_PATH	"/usr/bin/wormhole"
 
-extern int			wormhole_client(int argc, char **argv);
+
+struct wormhole_message_namespace_response;
+typedef bool		wormhole_namespace_response_callback_fn_t(struct wormhole_message_namespace_response *msg, int nsfd, void *closure);
+
+extern int		wormhole_client(int argc, char **argv);
+
+extern bool		wormhole_client_namespace_request(const char *query_string,
+					wormhole_namespace_response_callback_fn_t *callback, void *closure);
 
 #endif // _WORMHOLE_H
 
