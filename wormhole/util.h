@@ -42,5 +42,20 @@ extern char *			fsutil_tempdir_path(struct fsutil_tempdir *td);
 extern int			fsutil_tempdir_cleanup(struct fsutil_tempdir *td);
 
 extern int			fsutil_makedirs(const char *path, int mode);
+extern int			fsutil_create_empty(const char *path);
+
+enum {
+	FSUTIL_MISMATCH_TYPE = -2,
+	FSUTIL_MISMATCH_MISSING = -1,
+	FSUTIL_FILE_IDENTICAL = 0,
+
+	/* The rest are bits that can be tested for */
+	FSUTIL_FILE_SMALLER	= 0x001,
+	FSUTIL_FILE_BIGGER	= 0x002,
+	FSUTIL_FILE_YOUNGER	= 0x004,
+	FSUTIL_FILE_OLDER	= 0x008,
+};
+
+extern int			fsutil_inode_compare(const char *path1, const char *path2);
 
 #endif // _WORMHOLE_UTIL_H

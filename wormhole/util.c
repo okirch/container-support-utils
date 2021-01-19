@@ -27,6 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <fcntl.h>
 #include <errno.h>
 
 #include "tracing.h"
@@ -281,4 +282,48 @@ fsutil_makedirs(const char *path, int mode)
 
 	strcpy(path_copy, path);
 	return __fsutil_makedirs(path_copy, mode);
+}
+
+int
+fsutil_create_empty(const char *path)
+{
+	int fd;
+
+	if ((fd = open(path, O_WRONLY|O_CREAT, 0644)) < 0)
+		return -1;
+	close(fd);
+	return 0;
+}
+
+/*
+ * Rather special kind of file comparison
+ */
+int
+fsutil_inode_compare(const char *path1, const char *path2)
+{
+	struct stat stb1, stb2;
+	int verdict = FSUTIL_FILE_IDENTICAL;
+
+	if (lstat(path1, &stb1) < 0)
+		return FSUTIL_MISMATCH_MISSING;
+	if (lstat(path2, &stb2) < 0)
+		return FSUTIL_MISMATCH_MISSING;
+
+
+	if ((stb1.st_mode & S_IFMT) != (stb2.st_mode & S_IFMT))
+		return FSUTIL_MISMATCH_TYPE;
+
+	if (S_ISREG(stb1.st_mode)) {
+		if (stb1.st_size < stb2.st_size)
+			verdict |= FSUTIL_FILE_SMALLER;
+		else if (stb1.st_size > stb2.st_size)
+			verdict |= FSUTIL_FILE_BIGGER;
+	}
+
+	if (stb1.st_mtime < stb2.st_mtime)
+		verdict |= FSUTIL_FILE_YOUNGER;
+	else if (stb1.st_mtime > stb2.st_mtime)
+		verdict |= FSUTIL_FILE_OLDER;
+
+	return verdict;
 }
