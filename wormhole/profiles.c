@@ -372,7 +372,7 @@ pathinfo_overlay_path(wormhole_environment_t *environment, const struct path_inf
 	return _pathinfo_overlay_one(environment, source, dest, workdir);
 }
 
-static int
+static bool
 pathinfo_create_overlay(const char *tempdir, const char *where)
 {
 	char upper[PATH_MAX], lower[PATH_MAX], work[PATH_MAX];
@@ -384,15 +384,15 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 
 	if (symlink(where, lower) < 0) {
 		log_error("symlink(%s, %s): %m", where, lower);
-		return -1;
+		return false;
 	}
 	if (mkdir(upper, 0755) < 0) {
 		log_error("mkdir(%s): %m", upper);
-		return -1;
+		return false;
 	}
 	if (mkdir(work, 0755) < 0) {
 		log_error("mkdir(%s): %m", work);
-		return -1;
+		return false;
 	}
 
 	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
@@ -400,10 +400,10 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 
 	if (mount("foo", where, "overlay", 0, options) < 0) {
 		log_error("Cannot mount overlayfs at %s: %m", where);
-		return -1;
+		return false;
 	}
 
-	return 0;
+	return true;
 }
 
 static bool
@@ -429,7 +429,7 @@ pathinfo_bind_children(wormhole_environment_t *environment, const struct path_in
 	fsutil_tempdir_init(&td);
 
 	tempdir = fsutil_tempdir_path(&td);
-	if (pathinfo_create_overlay(tempdir, dest) < 0) {
+	if (!pathinfo_create_overlay(tempdir, dest)) {
 		log_error("unable to create overlay at \"%s\"", dest);
 		goto out;
 	}
