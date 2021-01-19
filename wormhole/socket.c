@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stddef.h>		/* for offsetof() */
+#include <fcntl.h>
 #include <errno.h>
 
 #include "tracing.h"
@@ -213,6 +214,8 @@ wormhole_listen(const char *socket_name, struct wormhole_app_ops *app_ops)
 		log_error("unable to create PF_LOCAL stream socket: %m");
 		return NULL;
 	}
+
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	if (bind(fd, (struct sockaddr *) &sun, sun_len) < 0) {
 		log_error("cannot bind to %s: %m", socket_name);
