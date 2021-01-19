@@ -44,6 +44,11 @@ extern int			fsutil_tempdir_cleanup(struct fsutil_tempdir *td);
 extern int			fsutil_makedirs(const char *path, int mode);
 extern int			fsutil_create_empty(const char *path);
 
+extern bool			fsutil_mount_overlay(const char *lowerdir,
+					const char *upperdir,
+					const char *workdir,
+					const char *target);
+
 enum {
 	FSUTIL_MISMATCH_TYPE = -2,
 	FSUTIL_MISMATCH_MISSING = -1,

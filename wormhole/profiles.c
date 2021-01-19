@@ -331,18 +331,8 @@ _pathinfo_overlay_one(wormhole_environment_t *environment,
 		const char *source, const char *target,
 		const char *workdir)
 {
-	char options[3 * PATH_MAX];
-
-	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
-			target, source, workdir);
-
-	if (mount("foo", target, "overlay", 0, options) < 0) {
-		log_error("Cannot mount overlayfs at %s: %m", target);
-		return false;
-	}
-
-	trace2("mounted overlay of %s and %s to %s", target, source, target);
-	return true;
+	/* Overlay "source" on top of "target" and mount at path "target" */
+	return fsutil_mount_overlay(target, source, workdir, target);
 }
 
 static bool
@@ -376,7 +366,6 @@ static bool
 pathinfo_create_overlay(const char *tempdir, const char *where)
 {
 	char upper[PATH_MAX], lower[PATH_MAX], work[PATH_MAX];
-	char options[3 * PATH_MAX];
 
 	snprintf(lower, sizeof(lower), "%s/lower", tempdir);
 	snprintf(upper, sizeof(upper), "%s/upper", tempdir);
@@ -395,15 +384,7 @@ pathinfo_create_overlay(const char *tempdir, const char *where)
 		return false;
 	}
 
-	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
-			lower, upper, work);
-
-	if (mount("foo", where, "overlay", 0, options) < 0) {
-		log_error("Cannot mount overlayfs at %s: %m", where);
-		return false;
-	}
-
-	return true;
+	return fsutil_mount_overlay(lower, upper, work, where);
 }
 
 static bool

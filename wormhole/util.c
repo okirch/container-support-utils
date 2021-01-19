@@ -327,3 +327,21 @@ fsutil_inode_compare(const char *path1, const char *path2)
 
 	return verdict;
 }
+
+bool
+fsutil_mount_overlay(const char *lowerdir, const char *upperdir, const char *workdir, const char *target)
+{
+	char options[3 * PATH_MAX];
+
+	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
+			lowerdir, upperdir, workdir);
+
+	if (mount("foo", target, "overlay", 0, options) < 0) {
+		log_error("Cannot mount overlayfs at %s: %m", target);
+		return false;
+	}
+
+	trace2("mounted overlay of %s and %s to %s", lowerdir, upperdir, target);
+	return true;
+}
+
