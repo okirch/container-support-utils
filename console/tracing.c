@@ -34,7 +34,10 @@
 #include "endpoint.h"
 #include "tracing.h"
 
+unsigned int	tracing_level = 0;
+
 void		(*__tracing_hook)(const char *fmt, ...);
+void		(*__tracing_hook2)(const char *fmt, ...);
 
 static FILE *	logfile = NULL;
 static bool	logging_to_tty = false;
@@ -210,7 +213,14 @@ set_logfile(const char *filename)
 void
 tracing_enable(void)
 {
-	__tracing_hook = log_debug;
+	/* Repeated calls to this function increase the verbosity level */
+	switch (++tracing_level) {
+	case 2:
+		__tracing_hook2 = log_debug;
+	case 1:
+		__tracing_hook = log_debug;
+		break;
+	}
 }
 
 void

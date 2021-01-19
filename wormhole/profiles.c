@@ -45,15 +45,12 @@
 static wormhole_profile_t *	wormhole_profiles;
 static wormhole_environment_t *	wormhole_environments;
 static const char *		wormhole_client_path;
-static bool			__trace_verbose = true;
 
 static bool			__wormhole_profiles_configure_environments(struct wormhole_environment_config *list);
 static bool			__wormhole_profiles_configure_profiles(struct wormhole_profile_config *list);
 
 static wormhole_environment_t *	wormhole_environment_new(const char *name);
 static wormhole_profile_t *	wormhole_profile_new(const char *name);
-
-#define trace2(msg...)		do { if (__trace_verbose) trace(msg); } while (0)
 
 /*
  * Initialize our internal data structures from config

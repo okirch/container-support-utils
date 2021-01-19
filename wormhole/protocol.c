@@ -426,7 +426,7 @@ wormhole_message_parse(struct buf *bp, uid_t sender_uid)
 		goto failed;
 
 #ifdef PROTOCOL_TRACING
-	{
+	if (tracing_level >= 2) {
 		unsigned int i, base, count = buf_available(payload);
 		const unsigned char *data = buf_head(payload);
 

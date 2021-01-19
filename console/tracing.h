@@ -24,11 +24,18 @@
 #include <unistd.h>
 
 extern void		(*__tracing_hook)(const char *fmt, ...);
+extern void		(*__tracing_hook2)(const char *fmt, ...);
 
 #define trace(...) do { \
 		if (__tracing_hook) \
 			__tracing_hook(__VA_ARGS__); \
 	} while (0)
+#define trace2(...) do { \
+		if (__tracing_hook2) \
+			__tracing_hook2(__VA_ARGS__); \
+	} while (0)
+
+extern unsigned int	tracing_level;
 
 extern bool		set_logfile(const char *filename);
 extern void		set_syslog(const char *name, int facility);
