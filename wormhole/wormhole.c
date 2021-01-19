@@ -41,6 +41,8 @@ struct option wormhole_options[] = {
 	{ NULL }
 };
 
+typedef bool		wormhole_namespace_response_callback_fn_t(struct wormhole_message_namespace_response *msg, int nsfd, void *closure);
+
 int
 main(int argc, char **argv)
 {
@@ -126,12 +128,25 @@ failed:
 }
 
 static bool
-wormhole_recv_namespace_response(wormhole_socket_t *s, char *cmdbuf, size_t cmdsize, int *resp_fd)
+wormhole_client_namespace_request(const char *query_string,
+		wormhole_namespace_response_callback_fn_t *callback, void *closure)
 {
+	wormhole_socket_t *s = NULL;
 	struct wormhole_message_parsed *pmsg = NULL;
-	struct buf *bp;
+	struct buf *bp = NULL;
+	int nsfd = -1;
+	bool rv = false;
 
-	if (!(bp = wormhole_recv_response(s, resp_fd)))
+	s = wormhole_connect(WORMHOLE_SOCKET_PATH, NULL);
+	if (s == NULL) {
+		log_error("Unable to connect to wormhole daemon");
+		goto failed;
+	}
+
+	if (wormhole_send_namespace_request(s, query_string) < 0)
+		goto failed;
+
+	if (!(bp = wormhole_recv_response(s, &nsfd)))
 		goto failed;
 
 	pmsg = wormhole_message_parse(bp, 0);
@@ -146,7 +161,6 @@ wormhole_recv_namespace_response(wormhole_socket_t *s, char *cmdbuf, size_t cmds
 			log_error("Server returns error status %d!", pmsg->payload.status.status);
 			goto failed;
 		}
-		cmdbuf[0] = '\0';
 		break;
 
 	case WORMHOLE_OPCODE_NAMESPACE_RESPONSE:
@@ -155,25 +169,12 @@ wormhole_recv_namespace_response(wormhole_socket_t *s, char *cmdbuf, size_t cmds
 			goto failed;
 		}
 
-		strncpy(cmdbuf, pmsg->payload.namespace_response.command, cmdsize - 1);
-
-		/* Apply any environment variables sent to us by the server.
-		 * If I was a halfway decent programmer, I'd pass this list back to
-		 * the caller and let her do with these whatever she wants, but being
-		 * the lazy bum that I am, I'm cutting one or two corners here. --okir
-		 */
-		if (pmsg->payload.namespace_response.environment_vars != NULL) {
-			char **env = pmsg->payload.namespace_response.environment_vars;
-			unsigned int i;
-
-			for (i = 0; env[i]; ++i)
-				putenv(env[i]);
+		if (nsfd < 0) {
+			log_error("Server did not send us a namespace FD");
+			goto failed;
 		}
 
-		if (pmsg->payload.namespace_response.server_socket) {
-			setenv("WORMHOLE_SOCKET", pmsg->payload.namespace_response.server_socket, 1);
-		}
-
+		rv = callback(&pmsg->payload.namespace_response, nsfd, closure);
 		break;
 
 	default:
@@ -181,43 +182,46 @@ wormhole_recv_namespace_response(wormhole_socket_t *s, char *cmdbuf, size_t cmds
 		goto failed;
 	}
 
-	return true;
-
 failed:
 	if (pmsg)
 		wormhole_message_free_parsed(pmsg);
 	if (bp)
 		buf_free(bp);
-	return false;
+	if (nsfd >= 0)
+		close(nsfd);
+	return rv;
 }
 
-int
-wormhole_client(int argc, char **argv)
-{
-	char pathbuf[PATH_MAX];
-	wormhole_socket_t *s;
-	int nsfd = -1;
+struct wormhole_namespace_closure {
+	int		argc;
+	char **		argv;
+};
 
-	s = wormhole_connect(WORMHOLE_SOCKET_PATH, NULL);
-	if (s == NULL) {
-		log_error("Unable to connect to wormhole daemon");
-		return 2;
+bool
+wormhole_namespace_response_callback(struct wormhole_message_namespace_response *msg, int nsfd, void *closure)
+{
+	struct wormhole_namespace_closure *cb = closure;
+
+	/* Apply any environment variables sent to us by the server.
+	 * If I was a halfway decent programmer, I'd pass this list back to
+	 * the caller and let her do with these whatever she wants, but being
+	 * the lazy bum that I am, I'm cutting one or two corners here. --okir
+	 */
+	if (msg->environment_vars != NULL) {
+		char **env = msg->environment_vars;
+		unsigned int i;
+
+		for (i = 0; env[i]; ++i)
+			putenv(env[i]);
 	}
 
-	if (wormhole_send_namespace_request(s, argv[0]) < 0)
-		return 1;
-
-	if (!wormhole_recv_namespace_response(s, pathbuf, sizeof(pathbuf), &nsfd))
-		return 1;
-
-	if (nsfd < 0) {
-		log_error("Server did not send us a namespace FD");
-		return 2;
+	if (msg->server_socket) {
+		setenv("WORMHOLE_SOCKET", msg->server_socket, 1);
 	}
 
 	if (setns(nsfd, CLONE_NEWNS) < 0) {
 		log_error("setns: %m");
-		return 2;
+		return false;
 	}
 
 	/* We no longer need this fd and should not pass it on to the executed command */
@@ -227,9 +231,20 @@ wormhole_client(int argc, char **argv)
 	setgid(getgid());
 	setuid(getuid());
 
-	printf("I should now execute %s\n", pathbuf);
-	execv(pathbuf, argv);
+	printf("I should now execute %s\n", msg->command);
+	execv(msg->command, cb->argv);
 
-	log_error("Unable to execute %s: %m", pathbuf);
+	log_error("Unable to execute %s: %m", msg->command);
+	return false;
+}
+
+int
+wormhole_client(int argc, char **argv)
+{
+	struct wormhole_namespace_closure closure = { argc, argv };
+
+	if (!wormhole_client_namespace_request(argv[0], wormhole_namespace_response_callback, &closure))
+		return 1;
+
 	return 12;
 }
