@@ -77,16 +77,12 @@ struct wormhole_namespace_closure {
 	char **		argv;
 };
 
-bool
+static bool
 wormhole_namespace_response_callback(struct wormhole_message_namespace_response *msg, int nsfd, void *closure)
 {
 	struct wormhole_namespace_closure *cb = closure;
 
-	/* Apply any environment variables sent to us by the server.
-	 * If I was a halfway decent programmer, I'd pass this list back to
-	 * the caller and let her do with these whatever she wants, but being
-	 * the lazy bum that I am, I'm cutting one or two corners here. --okir
-	 */
+	/* Apply any environment variables sent to us by the server. */
 	if (msg->environment_vars != NULL) {
 		char **env = msg->environment_vars;
 		unsigned int i;

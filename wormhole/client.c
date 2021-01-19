@@ -18,7 +18,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <sys/socket.h> /* only for send() call below - fix this */
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -31,6 +31,13 @@
 #include "socket.h"
 #include "util.h"
 #include "buffer.h"
+
+/* Note - the socket handling is a bit hodge podge here.
+ * I'm currently using some code from socket.c, because I'm lazy and don't want to
+ * write another copy of the SCM_RIGHTS handling stuff here.
+ * On the other hand, pulling lots of code from socket.c into a setuid binary makes
+ * it harder to audit this stuff, so I may end up doing just that...
+ */
 
 static int
 wormhole_send_namespace_request(wormhole_socket_t *s, const char *cmd)
