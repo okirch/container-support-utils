@@ -574,6 +574,47 @@ pathinfo_process(wormhole_environment_t *env, const struct path_info *pi, const 
 	}
 }
 
+/*
+ * Some overlays contain shared libraries. Maintain a separate ld.so.cache inside the layer.
+ */
+static bool
+wormhole_overlay_ldconfig(wormhole_environment_t *env, const struct wormhole_overlay_config *overlay, const char *overlay_root)
+{
+	char overlay_etc[PATH_MAX];
+	int verdict;
+
+	snprintf(overlay_etc, sizeof(overlay_etc), "%s/etc", overlay_root);
+	if (fsutil_makedirs(overlay_etc, 0755) < 0) {
+		log_error("Environment %s: unable to create /etc directory for ld.so.cache", env->name);
+		return false;
+	}
+
+	snprintf(overlay_etc, sizeof(overlay_etc), "%s/etc/ld.so.cache", overlay_root);
+	verdict = fsutil_inode_compare("/etc/ld.so.cache", overlay_etc);
+
+	/* If the overlay has its own version of /etc/ld.so.cache that has a more recent time
+	 * stamp than the "real" one, there's no need to regenerate.
+	 */
+	if (verdict < 0 || !(verdict & FSUTIL_FILE_YOUNGER)) {
+		char command[PATH_MAX];
+
+		trace2("Environment %s: updating ld.so.cache", env->name);
+
+		/* We do not re-create links. The links inside the layer should be
+		 * up-to-date (hopefully!); and touching links in layers below may
+		 * fail. */
+		snprintf(command, sizeof(command), "ldconfig -vX -C %s", overlay_etc);
+
+		if (system(command) != 0)
+			log_warning("Environment %s: ldconfig failed", env->name);
+	} else {
+		trace2("Environment %s: ld.so.cache exists and is recent - not updating it", env->name);
+	}
+
+	/* Now bind mount it */
+	return _pathinfo_bind_one(env, overlay_etc, "/etc/ld.so.cache");
+}
+
 static bool
 wormhole_overlay_setup(wormhole_environment_t *env, const struct wormhole_overlay_config *overlay)
 {
@@ -603,6 +644,9 @@ wormhole_overlay_setup(wormhole_environment_t *env, const struct wormhole_overla
 		ok = pathinfo_process(env, pi, overlay_root);
 		trace("  result: %sok", ok? "" : "not ");
 	}
+
+	if (ok && overlay->use_ldconfig)
+		ok = wormhole_overlay_ldconfig(env, overlay, overlay_root);
 
 	if (mounted && !overlay_container_unmount(env, overlay->image, overlay_root)) {
 		log_error("Environment %s: unable to unmount \"%s\": %m", env->name, overlay_root);

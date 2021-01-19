@@ -37,6 +37,8 @@ struct wormhole_overlay_config {
 	char *			directory;
 	char *			image;
 
+	bool			use_ldconfig;
+
 	unsigned int		npaths;
 	struct path_info	path[WORMHOLE_OVERLAY_PATH_MAX];
 };

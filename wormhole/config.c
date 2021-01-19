@@ -476,6 +476,29 @@ __wormhole_config_overlay_add_path(struct wormhole_overlay_config *overlay, cons
 }
 
 /*
+ * use <feature>
+ */
+static bool
+__wormhole_config_process_feature(const char *kwd, struct wormhole_overlay_config *overlay, struct parser_state *ps)
+{
+	char *feature = NULL;
+	bool ok = true;
+
+	if (!__wormhole_config_process_string(kwd, &feature, ps))
+		return false;
+
+	if (!strcmp(feature, "ldconfig")) {
+		overlay->use_ldconfig = true;
+	} else {
+		parser_error(ps, "%s: unknown feature \"%s\"", kwd, feature);
+		ok = false;
+	}
+
+	free(feature);
+	return ok;
+}
+
+/*
  * Process overlay block
  */
 static bool
@@ -487,6 +510,8 @@ __wormhole_config_overlay_directive(void *block_obj, const char *kwd, struct par
 		return __wormhole_config_process_string(kwd, &overlay->directory, ps);
 	if (!strcmp(kwd, "image"))
 		return __wormhole_config_process_string(kwd, &overlay->image, ps);
+	if (!strcmp(kwd, "use"))
+		return __wormhole_config_process_feature(kwd, overlay, ps);
 	if (!strcmp(kwd, "bind"))
 		return __wormhole_config_overlay_add_path(overlay, kwd, WORMHOLE_PATH_TYPE_BIND, ps);
 	if (!strcmp(kwd, "bind-children"))
