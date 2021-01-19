@@ -43,6 +43,7 @@ extern int			fsutil_tempdir_cleanup(struct fsutil_tempdir *td);
 
 extern int			fsutil_makedirs(const char *path, int mode);
 extern int			fsutil_create_empty(const char *path);
+extern bool			fsutil_check_path_prefix(const char *path, const char *potential_prefix);
 
 extern bool			fsutil_mount_overlay(const char *lowerdir,
 					const char *upperdir,

@@ -246,7 +246,7 @@ __fsutil_makedirs(char *path, int mode)
 	char *slash;
 	int ret;
 
-	trace("%s(%s)", __func__, path);
+	/* trace("%s(%s)", __func__, path); */
 	if (mkdir(path, mode) == 0)
 		return 0;
 
@@ -293,6 +293,21 @@ fsutil_create_empty(const char *path)
 		return -1;
 	close(fd);
 	return 0;
+}
+
+bool
+fsutil_check_path_prefix(const char *path, const char *potential_prefix)
+{
+	unsigned int len;
+
+	if (potential_prefix == NULL || path == NULL)
+		return false;
+
+	len = strlen(potential_prefix);
+	if (strncmp(path, potential_prefix, len) != 0)
+		return false;
+
+	return path[len] == 0 || path[len] == '/';
 }
 
 /*
