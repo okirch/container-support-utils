@@ -23,6 +23,13 @@ WORMHOLED_SRCS	= wormholed.c \
 		  config.c \
 		  util.c
 WORMHOLED_OBJS	= $(WORMHOLED_SRCS:.c=.o)
+DIGGER		= workhole-digger
+DIGGER_SRCS	= digger.c \
+		  client.c \
+		  socket.c \
+		  protocol.c \
+		  util.c
+DIGGER_OBJS	= $(DIGGER_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
 
@@ -30,13 +37,13 @@ LIB		= ../console/libconsole.a
 #MAN5PAGES	= wormhole.conf.5
 MAN8PAGES	= wormholed.8
 
-all: $(WORMHOLE) $(WORMHOLED)
+all: $(WORMHOLE) $(WORMHOLED) $(DIGGER)
 
 clean:
 	rm -f $(WORMHOLE)
 	rm -f *.o *.a
 
-install: $(WORMHOLE) $(WORMHOLED)
+install: $(WORMHOLE) $(WORMHOLED) $(DIGGER)
 	@case "$(DESTDIR)" in \
 	""|/*) ;; \
 	*) echo "DESTDIR is a relative path, no workie" >&2; exit 2;; \
@@ -44,6 +51,7 @@ install: $(WORMHOLE) $(WORMHOLED)
 	install -m 755 -d $(DESTDIR)$(BINDIR)
 	install -m 4555 $(WORMHOLE) $(DESTDIR)$(BINDIR)
 	install -m 555 $(WORMHOLED) $(DESTDIR)$(SBINDIR)
+	install -m 555 $(DIGGER) $(DESTDIR)$(SBINDIR)
 ifneq ($(MAN1PAGES),)
 	install -m 755 -d $(DESTDIR)$(MAN1DIR)
 	install -m 444 $(MAN1PAGES) $(DESTDIR)$(MAN1DIR)
@@ -62,6 +70,9 @@ $(WORMHOLE): $(WORMHOLE_OBJS) $(LIB)
 
 $(WORMHOLED): $(WORMHOLED_OBJS) $(LIB)
 	$(CC) $(CFLAGS) -o $@ $(WORMHOLED_OBJS) $(LINK)
+
+$(DIGGER): $(DIGGER_OBJS) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $(DIGGER_OBJS) $(LINK)
 
 config-test: config.c
 	$(CC) $(CFLAGS) -o $@ -DTEST config.c $(LINK)
