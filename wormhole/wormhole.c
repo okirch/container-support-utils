@@ -75,13 +75,13 @@ main(int argc, char **argv)
 }
 
 static int
-wormhole_send_namespace_request(int fd, const char *cmd)
+wormhole_send_namespace_request(wormhole_socket_t *s, const char *cmd)
 {
 	struct buf *bp;
 	int rv = 0;
 
 	bp = wormhole_message_build_namespace_request(cmd);
-	rv = send(fd, buf_head(bp), buf_available(bp), 0);
+	rv = send(s->fd, buf_head(bp), buf_available(bp), 0);
 	if (rv < 0)
 		log_error("send: %m");
 
@@ -90,7 +90,7 @@ wormhole_send_namespace_request(int fd, const char *cmd)
 }
 
 static struct buf *
-wormhole_recv_response(int sock_fd, int *resp_fd)
+wormhole_recv_response(wormhole_socket_t *s, int *resp_fd)
 {
 	struct buf *bp = buf_alloc();
 
@@ -98,7 +98,7 @@ wormhole_recv_response(int sock_fd, int *resp_fd)
 	while (!wormhole_message_complete(bp)) {
 		int received, fd;
 
-		received = wormhole_socket_recvmsg(sock_fd, buf_tail(bp), buf_tailroom(bp), &fd);
+		received = wormhole_socket_recvmsg(s->fd, buf_tail(bp), buf_tailroom(bp), &fd);
 		if (received < 0) {
 			log_error("recvmsg: %m");
 			goto failed;
@@ -126,12 +126,12 @@ failed:
 }
 
 static bool
-wormhole_recv_namespace_response(int sock_fd, char *cmdbuf, size_t cmdsize, int *resp_fd)
+wormhole_recv_namespace_response(wormhole_socket_t *s, char *cmdbuf, size_t cmdsize, int *resp_fd)
 {
 	struct wormhole_message_parsed *pmsg = NULL;
 	struct buf *bp;
 
-	if (!(bp = wormhole_recv_response(sock_fd, resp_fd)))
+	if (!(bp = wormhole_recv_response(s, resp_fd)))
 		goto failed;
 
 	pmsg = wormhole_message_parse(bp, 0);
@@ -196,7 +196,7 @@ wormhole_client(int argc, char **argv)
 {
 	char pathbuf[PATH_MAX];
 	wormhole_socket_t *s;
-	int fd, nsfd = -1;
+	int nsfd = -1;
 
 	s = wormhole_connect(WORMHOLE_SOCKET_PATH, NULL);
 	if (s == NULL) {
@@ -204,12 +204,10 @@ wormhole_client(int argc, char **argv)
 		return 2;
 	}
 
-	fd = s->fd;
-
-	if (wormhole_send_namespace_request(fd, argv[0]) < 0)
+	if (wormhole_send_namespace_request(s, argv[0]) < 0)
 		return 1;
 
-	if (!wormhole_recv_namespace_response(fd, pathbuf, sizeof(pathbuf), &nsfd))
+	if (!wormhole_recv_namespace_response(s, pathbuf, sizeof(pathbuf), &nsfd))
 		return 1;
 
 	if (nsfd < 0) {
