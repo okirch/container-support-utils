@@ -53,11 +53,17 @@ struct wormhole_request {
 	bool		reply_sent;
 };
 
+enum {
+	OPT_NO_CONFIG
+};
+
 struct option wormhole_options[] = {
 	{ "foreground",	no_argument,		NULL,	'F' },
 	{ "runtime",	required_argument,	NULL,	'R' },
 	{ "name",	required_argument,	NULL,	'N' },
 	{ "debug",	no_argument,		NULL,	'd' },
+
+	{ "no-config",	no_argument,		NULL,	OPT_NO_CONFIG },
 	{ NULL }
 };
 
@@ -65,6 +71,7 @@ static char *			opt_server_path;
 static const char *		opt_runtime = "default";
 static const char *		opt_socket_name = WORMHOLE_SOCKET_PATH;
 static bool			opt_foreground = false;
+static bool			opt_no_config = false;
 
 static int			wormhole_daemon(const char *socket_path);
 static void			wormhole_reap_children(void);
@@ -102,6 +109,11 @@ main(int argc, char **argv)
 		case 'd':
 			tracing_enable();
 			break;
+
+		case OPT_NO_CONFIG:
+			opt_no_config = true;
+			break;
+
 		default:
 			log_error("Usage message goes here.");
 			return 2;
@@ -111,11 +123,15 @@ main(int argc, char **argv)
 	if (!wormhole_select_runtime(opt_runtime))
 		log_fatal("Unable to set up requested container runtime");
 
-	if (!(config = wormhole_config_load(WORMHOLE_CONFIG_PATH)))
-		log_fatal("Unable to load configuration file");
+	if (opt_no_config) {
+		log_info("Not loading any config file\n");
+	} else {
+		if (!(config = wormhole_config_load(WORMHOLE_CONFIG_PATH)))
+			log_fatal("Unable to load configuration file");
 
-	if (!wormhole_profiles_configure(config))
-		log_fatal("Bad configuration, cannot continue.");
+		if (!wormhole_profiles_configure(config))
+			log_fatal("Bad configuration, cannot continue.");
+	}
 
 	return wormhole_daemon(opt_socket_name);
 }
@@ -451,6 +467,7 @@ wormhole_start_sub_daemon(wormhole_environment_t *env)
 	argv[argc++] = "--name";
 	argv[argc++] = namebuf;
 	argv[argc++] = "--foreground";
+	argv[argc++] = "--no-config";
 	argv[argc++] = "--runtime";
 	argv[argc++] = opt_runtime;
 	argv[argc] = NULL;
