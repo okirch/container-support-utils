@@ -351,7 +351,7 @@ fsutil_mount_overlay(const char *lowerdir, const char *upperdir, const char *wor
 	snprintf(options, sizeof(options), "lowerdir=%s,upperdir=%s,workdir=%s",
 			lowerdir, upperdir, workdir);
 
-	if (mount("foo", target, "overlay", 0, options) < 0) {
+	if (mount("wormhole", target, "overlay", 0, options) < 0) {
 		log_error("Cannot mount overlayfs at %s: %m", target);
 		return false;
 	}
