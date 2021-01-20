@@ -23,7 +23,7 @@ WORMHOLED_SRCS	= wormholed.c \
 		  config.c \
 		  util.c
 WORMHOLED_OBJS	= $(WORMHOLED_SRCS:.c=.o)
-DIGGER		= workhole-digger
+DIGGER		= wormhole-digger
 DIGGER_SRCS	= digger.c \
 		  client.c \
 		  socket.c \
