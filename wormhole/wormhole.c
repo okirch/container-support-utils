@@ -33,9 +33,12 @@
 #include "util.h"
 
 static struct option wormhole_options[] = {
-	{ "debug",	no_argument,		NULL,	'd' },
+	{ "debug",		no_argument,		NULL,	'd' },
+	{ "environment",	required_argument,	NULL,	'E' },
 	{ NULL }
 };
+
+static const char *	opt_environment = NULL;
 
 typedef bool		wormhole_namespace_response_callback_fn_t(struct wormhole_message_namespace_response *msg, int nsfd, void *closure);
 
@@ -61,6 +64,12 @@ main(int argc, char **argv)
 		switch (c) {
 		case 'd':
 			tracing_enable();
+			break;
+
+		case 'E':
+			if (getuid() != 0)
+				log_fatal("You must be root to use the --environment option");
+			opt_environment = optarg;
 			break;
 
 		default:
@@ -126,7 +135,10 @@ wormhole_client(int argc, char **argv)
 {
 	struct wormhole_namespace_closure closure = { argc, argv };
 
-	if (!wormhole_client_namespace_request(argv[0], wormhole_namespace_response_callback, &closure))
+	if (opt_environment == NULL)
+		opt_environment = argv[0];
+
+	if (!wormhole_client_namespace_request(opt_environment, wormhole_namespace_response_callback, &closure))
 		return 1;
 
 	return 12;
