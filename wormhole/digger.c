@@ -229,6 +229,13 @@ wormhole_digger(int argc, char **argv)
 		"/opt",
 		"/sbin",
 		"/usr",
+		"/var/cache",
+		"/var/lib",
+		"/var/lock",
+		"/var/log",
+		"/var/opt",
+		"/var/run",
+		"/var/spool",
 		NULL,
 	};
 
