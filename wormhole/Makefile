@@ -30,6 +30,10 @@ DIGGER_SRCS	= digger.c \
 		  protocol.c \
 		  util.c
 DIGGER_OBJS	= $(DIGGER_SRCS:.c=.o)
+AUTOPROF	= wormhole-autoprofile
+AUTOPROF_SRCS	= auto-profile.c \
+		  util.c
+AUTOPROF_OBJS	= $(AUTOPROF_SRCS:.c=.o)
 LINK		= -L../console -lconsole -lutil
 LIB		= ../console/libconsole.a
 
@@ -37,7 +41,7 @@ LIB		= ../console/libconsole.a
 #MAN5PAGES	= wormhole.conf.5
 MAN8PAGES	= wormholed.8
 
-all: $(WORMHOLE) $(WORMHOLED) $(DIGGER)
+all: $(WORMHOLE) $(WORMHOLED) $(DIGGER) $(AUTOPROF)
 
 clean:
 	rm -f $(WORMHOLE)
@@ -73,6 +77,9 @@ $(WORMHOLED): $(WORMHOLED_OBJS) $(LIB)
 
 $(DIGGER): $(DIGGER_OBJS) $(LIB)
 	$(CC) $(CFLAGS) -o $@ $(DIGGER_OBJS) $(LINK)
+
+$(AUTOPROF): $(AUTOPROF_OBJS) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $(AUTOPROF_OBJS) $(LINK)
 
 config-test: config.c
 	$(CC) $(CFLAGS) -o $@ -DTEST config.c $(LINK)
